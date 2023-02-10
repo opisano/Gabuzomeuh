@@ -1,10 +1,6 @@
-
-
-
 const TITLE_START: u16 = 0x0134;
 const CGB_FLAG_ADDRESS: u16 = 0x0143;
 const CARTRIDGE_TYPE: u16 = 0x0147;
-
 
 pub enum Mapper {
     NoMapper,
@@ -19,13 +15,11 @@ pub enum Mapper {
     M161,
     HuC1,
     HuC3,
-    Other
+    Other,
 }
-
 
 /// Common interface for interacting with cartridges
 pub trait Cartridge {
-
     /// Read at a specified address in ROM
     fn read_rom(&self, addr: u16) -> u8;
 
@@ -38,7 +32,6 @@ pub trait Cartridge {
     /// Write value at specified address in RAM
     fn write_ram(&mut self, addr: u16, val: u8);
 
-
     fn title(&self) -> String {
         let title_size: u16 = 16;
         let mut result = String::with_capacity(title_size as usize);
@@ -48,7 +41,6 @@ pub trait Cartridge {
             match c {
                 32..=0x7F => result.push(c as char),
                 _ => break,
-
             }
         }
         result
@@ -58,29 +50,47 @@ pub trait Cartridge {
         let value = self.read_rom(CARTRIDGE_TYPE);
 
         match value {
-            0|8|9       => Mapper::NoMapper,
-            1..=3       => Mapper::MBC1,
-            5|6         => Mapper::MBC2,
-            0xb..=0xd   => Mapper::MMM01,
+            0 | 8 | 9 => Mapper::NoMapper,
+            1..=3 => Mapper::MBC1,
+            5 | 6 => Mapper::MBC2,
+            0xb..=0xd => Mapper::MMM01,
             0x0F..=0x13 => Mapper::MBC3,
             0x19..=0x1E => Mapper::MBC5,
-            0x20        => Mapper::MBC6,
-            0x22        => Mapper::MBC7,
-            0xFE        => Mapper::HuC3,
-            0xFF        => Mapper::HuC1,
-            _           => Mapper::Other
+            0x20 => Mapper::MBC6,
+            0x22 => Mapper::MBC7,
+            0xFE => Mapper::HuC3,
+            0xFF => Mapper::HuC1,
+            _ => Mapper::Other,
         }
     }
-
 }
 
+pub struct NoCartridge {}
+
+impl Cartridge for NoCartridge {
+    fn read_rom(&self, addr: u16) -> u8 {
+        0
+    }
+
+    fn read_ram(&self, addr: u16) -> u8 {
+        0
+    }
+
+    fn write_rom(&mut self, addr: u16, val: u8) {
+        ()
+    }
+
+    fn write_ram(&mut self, addr: u16, val: u8) {
+        ()
+    }
+}
 
 ///
 /// Small games of not more than 32KBytes ROM do not require a MBC chip for ROM
-///  banking. The ROM is directly mapped to memory at 0000-7FFFh. 
-/// 
-struct NoMapperCartridge {
-    data: Vec<u8>
+///  banking. The ROM is directly mapped to memory at 0000-7FFFh.
+///
+pub struct NoMapperCartridge {
+    data: Vec<u8>,
 }
 
 impl Cartridge for NoMapperCartridge {

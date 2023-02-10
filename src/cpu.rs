@@ -1,3 +1,7 @@
+use std::{default, rc::Rc};
+
+use crate::memory::Memory;
+
 #[derive(Default)]
 struct Registers {
     a: u8,
@@ -16,7 +20,6 @@ const FLAG_ZERO: u8 = 0x80;
 const FLAG_SUB: u8 = 0x40;
 const FLAG_HALF: u8 = 0x20;
 const FLAG_CARRY: u8 = 0x10;
-const FLAG_NONE: u8 = 0x00;
 
 impl Registers {
     /// Combine a 16 bit value write to registers A and F
@@ -105,6 +108,20 @@ impl Registers {
     fn toggle_zero_flag(&mut self, value: u8) {
         if value == 0 {
             self.toggle_flag(FLAG_ZERO);
+        }
+    }
+
+    /// Toggle the carry flag
+    fn toggle_carry_flag(&mut self, value: u32) {
+        if (value & 0x100) != 0 {
+            self.toggle_flag(FLAG_CARRY);
+        }
+    }
+
+    /// Toggle the half flag
+    fn toggle_half_flag(&mut self, value: u32) {
+        if (value & 0x10) != 0 {
+            self.toggle_flag(FLAG_HALF);
         }
     }
 }
@@ -199,4 +216,107 @@ fn test_clear_flag() {
     regs.clear_flag(FLAG_CARRY);
     assert_eq!(regs.f & FLAG_CARRY, 0);
     assert_eq!(regs.f & FLAG_HALF, FLAG_HALF);
+}
+
+struct CPU {
+    regs: Registers,
+    mem: Rc<Memory>,
+}
+
+impl Default for CPU {
+    fn default() -> Self {
+        Self {
+            regs: Default::default(),
+            mem: Default::default(),
+        }
+    }
+}
+
+impl CPU {
+    /// Add value to register A
+    ///
+    /// A := A + value
+    ///
+    /// Set Z, C, H flags
+    ///
+    fn add_imm(&mut self, value: u8) {
+        let result = (self.regs.a as u32) + (value as u32);
+        let carry = (self.regs.a as u32) ^ (value as u32) ^ result;
+        self.regs.a = result as u8;
+        self.regs.f = 0;
+        self.regs.toggle_zero_flag(result as u8);
+        self.regs.toggle_carry_flag(carry);
+        self.regs.toggle_half_flag(carry);
+    }
+
+    /// Add value and Carry to register A
+    ///
+    /// A := A + C + value
+    ///
+    /// Set Z, C, H flags
+    ///
+    fn adc_imm(&mut self, value: u8) {
+        let c = if self.regs.f & FLAG_CARRY == FLAG_CARRY {
+            1u32
+        } else {
+            0u32
+        };
+
+        let result = (self.regs.a as u32) + (value as u32) + c;
+        let carry = (self.regs.a as u32) ^ (value as u32) ^ result;
+        self.regs.a = result as u8;
+        self.regs.f = 0;
+        self.regs.toggle_zero_flag(result as u8);
+        self.regs.toggle_carry_flag(carry);
+        self.regs.toggle_half_flag(carry);
+    }
+}
+
+#[test]
+fn test_add_imm() {
+    let mut cpu: CPU = Default::default();
+    cpu.add_imm(0);
+    assert_eq!(cpu.regs.a, 0);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+
+    cpu.add_imm(0x80);
+    assert_eq!(cpu.regs.a, 0x80);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+
+    cpu.add_imm(0x80);
+    assert_eq!(cpu.regs.a, 0x00);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+
+    cpu.add_imm(0x08);
+    assert_eq!(cpu.regs.a, 0x08);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
+    assert_eq!(cpu.regs.f & FLAG_HALF, 0);
+
+    cpu.add_imm(0x08);
+    assert_eq!(cpu.regs.a, 0x10);
+    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+}
+
+#[test]
+fn test_adc_imm() {
+    let mut cpu: CPU = Default::default();
+    cpu.adc_imm(0);
+    assert_eq!(cpu.regs.a, 0);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+
+    cpu.adc_imm(0x80);
+    assert_eq!(cpu.regs.a, 0x80);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+
+    cpu.adc_imm(0x80);
+    assert_eq!(cpu.regs.a, 0x00);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+
+    cpu.adc_imm(0x00);
+    assert_eq!(cpu.regs.a, 0x01);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
 }
