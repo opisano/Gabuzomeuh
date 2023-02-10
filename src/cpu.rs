@@ -1,3 +1,4 @@
+#[derive(Default)]
 struct Registers {
     a: u8,
     b: u8,
@@ -16,23 +17,6 @@ const FLAG_SUB: u8 = 0x40;
 const FLAG_HALF: u8 = 0x20;
 const FLAG_CARRY: u8 = 0x10;
 const FLAG_NONE: u8 = 0x00;
-
-impl Default for Registers {
-    fn default() -> Self {
-        Self {
-            a: 0,
-            b: 0,
-            c: 0,
-            d: 0,
-            e: 0,
-            f: 0,
-            h: 0,
-            l: 0,
-            sp: 0,
-            pc: 0,
-        }
-    }
-}
 
 impl Registers {
     /// Combine a 16 bit value write to registers A and F
@@ -127,9 +111,12 @@ impl Registers {
 
 #[test]
 fn test_get_af() {
-    let mut regs: Registers = Default::default();
-    regs.a = 0x55;
-    regs.f = 0xA0;
+    let regs = Registers {
+        a: 0x55,
+        f: 0xA0,
+        ..Default::default()
+    };
+
     assert_eq!(regs.get_af(), 0x55A0);
 }
 
@@ -143,9 +130,11 @@ fn test_set_af() {
 
 #[test]
 fn test_get_bc() {
-    let mut regs: Registers = Default::default();
-    regs.b = 0x55;
-    regs.c = 0xAA;
+    let regs = Registers {
+        b: 0x55,
+        c: 0xAA,
+        ..Default::default()
+    };
     assert_eq!(regs.get_bc(), 0x55AA);
 }
 
@@ -159,9 +148,11 @@ fn test_set_bc() {
 
 #[test]
 fn test_get_de() {
-    let mut regs: Registers = Default::default();
-    regs.d = 0x55;
-    regs.e = 0xAA;
+    let regs = Registers {
+        d: 0x55,
+        e: 0xAA,
+        ..Default::default()
+    };
     assert_eq!(regs.get_de(), 0x55AA);
 }
 
@@ -175,9 +166,11 @@ fn test_set_de() {
 
 #[test]
 fn test_get_hl() {
-    let mut regs: Registers = Default::default();
-    regs.h = 0x55;
-    regs.l = 0xAA;
+    let regs = Registers {
+        h: 0x55,
+        l: 0xAA,
+        ..Default::default()
+    };
     assert_eq!(regs.get_hl(), 0x55AA);
 }
 
