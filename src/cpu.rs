@@ -309,10 +309,37 @@ impl CPU {
         self.regs.toggle_half_flag(carry);
     }
 
+    /// Perform binary AND operation
+    ///
+    /// A := A & value
+    /// F |= FLAG_HALF
+    ///
+    /// Set Z flag
     fn and_imm(&mut self, value: u8) {
         self.regs.a &= value;
         self.regs.f = FLAG_HALF;
         self.regs.toggle_zero_flag(self.regs.a);
+    }
+
+    fn xor_imm(&mut self, value: u8) {
+        self.regs.a ^= value;
+        self.regs.f = 0;
+        self.regs.toggle_zero_flag(self.regs.a);
+    }
+
+    fn or_imm(&mut self, value: u8) {
+        self.regs.a |= value;
+        self.regs.f = 0;
+        self.regs.toggle_zero_flag(self.regs.a);
+    }
+
+    fn cp_imm(&mut self, value: u8) {
+        let result = (self.regs.a as u32) - (value as u32);
+        let carry = (self.regs.a as u32) ^ (value as u32) ^ result;
+        self.regs.f = FLAG_SUB;
+        self.regs.toggle_zero_flag(result as u8);
+        self.regs.toggle_carry_flag(carry);
+        self.regs.toggle_half_flag(carry);
     }
 }
 
@@ -407,5 +434,42 @@ fn test_and_imm() {
     cpu.and_imm(0);
     assert_eq!(cpu.regs.a, 0);
     assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+}
+
+#[test]
+fn test_xor_imm() {
+    let mut cpu: CPU = Default::default();
+    cpu.regs.a = 0x05;
+
+    cpu.xor_imm(4);
+    assert_eq!(cpu.regs.a, 1);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+
+    cpu.xor_imm(1);
+    assert_eq!(cpu.regs.a, 0);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+}
+
+#[test]
+fn test_or_imm() {
+    let mut cpu: CPU = Default::default();
+
+    cpu.or_imm(0);
+    assert_eq!(cpu.regs.a, 0);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+
+    cpu.or_imm(0x0A);
+    assert_eq!(cpu.regs.a, 0x0A);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+}
+
+#[test]
+fn test_cp_imm() {
+    let mut cpu: CPU = Default::default();
+    cpu.add_imm(10);
+    cpu.cp_imm(10);
+    assert_eq!(cpu.regs.a, 10);
+    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
     assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
 }
