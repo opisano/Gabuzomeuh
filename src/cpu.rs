@@ -270,6 +270,22 @@ impl CPU {
         self.regs.toggle_carry_flag(carry);
         self.regs.toggle_half_flag(carry);
     }
+
+    /// Subtract value from register A
+    ///
+    /// A := A - value
+    ///
+    /// Set Z, C, H flags
+    ///
+    fn sub_imm(&mut self, value: u8) {
+        let result = (self.regs.a as u32) - (value as u32);
+        let carry = (self.regs.a as u32) ^ (value as u32) ^ result;
+        self.regs.a = result as u8;
+        self.regs.f = FLAG_SUB;
+        self.regs.toggle_zero_flag(result as u8);
+        self.regs.toggle_carry_flag(carry);
+        self.regs.toggle_half_flag(carry);
+    }
 }
 
 #[test]
@@ -319,4 +335,17 @@ fn test_adc_imm() {
     assert_eq!(cpu.regs.a, 0x01);
     assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
     assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
+}
+
+#[test]
+fn test_sub_imm() {
+    let mut cpu: CPU = Default::default();
+    cpu.add_imm(10);
+    assert_eq!(cpu.regs.a, 10);
+    assert_eq!(cpu.regs.f, 0);
+
+    cpu.sub_imm(10);
+    assert_eq!(cpu.regs.a, 0);
+    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
 }
