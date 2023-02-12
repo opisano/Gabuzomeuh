@@ -318,27 +318,43 @@ impl CPU {
         self.regs.toggle_zero_flag(self.regs.a);
     }
 
+    /// Perform binary XOR operation
+    ///
+    /// A := A & value
+    ///
+    /// Set Z flag
     fn xor_imm(&mut self, value: u8) {
         self.regs.a ^= value;
         self.regs.f = 0;
         self.regs.toggle_zero_flag(self.regs.a);
     }
 
+    /// Perform binary OR operation
+    ///
+    /// A := A & value
+    ///
+    /// Set Z flag
     fn or_imm(&mut self, value: u8) {
         self.regs.a |= value;
         self.regs.f = 0;
         self.regs.toggle_zero_flag(self.regs.a);
     }
 
+    /// Compare A to value
+    ///
+    /// Similar to a SUB, but leaves A untouched.
+    ///
     fn cp_imm(&mut self, value: u8) {
-        let result = (self.regs.a as u32) - (value as u32);
-        let carry = (self.regs.a as u32) ^ (value as u32) ^ result;
-        self.regs.f = FLAG_SUB;
-        self.regs.toggle_zero_flag(result as u8);
-        self.regs.toggle_carry_flag(carry);
-        self.regs.toggle_half_flag(carry);
+        let save = self.regs.a;
+        self.sub(value, false);
+        self.regs.a = save;
     }
 
+    /// Increment a value by 1
+    ///
+    /// Set H and Z flags
+    ///
+    /// Return new value
     fn inc(&mut self, value: u8) -> u8 {
         let result = ((value as u32) + 1) as u8;
         self.regs.f = 0;
@@ -347,12 +363,38 @@ impl CPU {
         result
     }
 
+    /// Decrement a value by 1
+    ///
+    /// Set H and Z flags
+    ///
+    /// Return new value
     fn dec(&mut self, value: u8) -> u8 {
         let result = Wrapping(value) - Wrapping(1u8);
         self.regs.f = FLAG_SUB;
-        self.regs.toggle_half_flag(result.0 as u32);
+        if (value & 0x0F) == 0 {
+            self.regs.f |= FLAG_HALF;
+        }
         self.regs.toggle_zero_flag(result.0 as u8);
         result.0
+    }
+
+    fn daa(&mut self) {
+        let mut a = Wrapping(self.regs.a);
+
+        if (a.0 & 0x0F) > 0x09 || (self.regs.f & FLAG_HALF) == FLAG_HALF {
+            a += Wrapping(0x06);
+        }
+
+        if (a.0 & 0xF0) > 0x90 || (self.regs.f & FLAG_CARRY) == FLAG_CARRY {
+            if (a.0 as u32) + 0x60 > 99 {
+                self.regs.f |= FLAG_CARRY;
+            }
+            a += Wrapping(0x60);
+        }
+
+        self.regs.toggle_zero_flag(a.0);
+        self.regs.f &= !FLAG_HALF;
+        self.regs.a = a.0;
     }
 }
 
@@ -528,7 +570,6 @@ fn test_dec() {
     assert_eq!(cpu.regs.a, 0x10);
     assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
     assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
     assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
 
     cpu.regs.a = 0x00;
@@ -538,4 +579,32 @@ fn test_dec() {
     assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
     assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
     assert_eq!(cpu.regs.f & FLAG_CARRY, 0)
+}
+
+#[test]
+fn test_daa() {
+    let mut cpu: CPU = Default::default();
+    cpu.regs.a = 0x55;
+    cpu.add_imm(0x11);
+    cpu.daa();
+    assert_eq!(cpu.regs.a, 0x66);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
+
+    cpu.regs.a = 0x59;
+    cpu.add_imm(0x12);
+    cpu.daa();
+    assert_eq!(cpu.regs.a, 0x71);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
+
+    cpu.regs.a = 0x90;
+    cpu.add_imm(0x10);
+    cpu.daa();
+    assert_eq!(cpu.regs.a, 0x00);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+
+    cpu.regs.a = 0x99;
+    cpu.add_imm(0x01);
+    cpu.daa();
+    assert_eq!(cpu.regs.a, 0x00);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
 }
