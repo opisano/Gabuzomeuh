@@ -308,6 +308,12 @@ impl CPU {
         self.regs.toggle_carry_flag(carry);
         self.regs.toggle_half_flag(carry);
     }
+
+    fn and_imm(&mut self, value: u8) {
+        self.regs.a &= value;
+        self.regs.f = FLAG_HALF;
+        self.regs.toggle_zero_flag(self.regs.a);
+    }
 }
 
 #[test]
@@ -386,4 +392,20 @@ fn test_sbc_imm() {
     cpu.sbc_imm(2);
     assert_eq!(cpu.regs.a, 2);
     assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
+}
+
+#[test]
+fn test_and_imm() {
+    let mut cpu: CPU = Default::default();
+    cpu.regs.a = 0x05;
+
+    cpu.and_imm(1);
+    assert_eq!(cpu.regs.a, 1);
+    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+
+    cpu.and_imm(0);
+    assert_eq!(cpu.regs.a, 0);
+    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
 }
