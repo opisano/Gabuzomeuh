@@ -396,6 +396,11 @@ impl CPU {
         self.regs.f &= !FLAG_HALF;
         self.regs.a = a.0;
     }
+
+    fn cpl(&mut self) {
+        self.regs.a = !self.regs.a;
+        self.regs.f = FLAG_SUB | FLAG_HALF;
+    }
 }
 
 #[test]
@@ -607,4 +612,15 @@ fn test_daa() {
     cpu.daa();
     assert_eq!(cpu.regs.a, 0x00);
     assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+}
+
+#[test]
+fn test_cpl() {
+    let mut cpu: CPU = Default::default();
+    cpu.regs.a = 0x55;
+    cpu.cpl();
+
+    assert_eq!(cpu.regs.a, 0xAA);
+    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
+    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
 }
