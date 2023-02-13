@@ -254,6 +254,23 @@ impl Cpu {
         self.mem.write16(addr, result as u16);
     }
 
+    fn add_sp(&mut self, value: u8) {
+        let signed_value = (value as i8) as i16;
+        let signed_sp = self.regs.sp as i16;
+        let new_signed_sp_value = Wrapping(signed_sp) + Wrapping(signed_value);
+        let new_sp_value = new_signed_sp_value.0 as u16;
+
+        self.regs.toggle_half_flag(new_sp_value as u32);
+
+        // overflow did occur ?
+        if (new_sp_value < self.regs.sp && value < 128)
+            || (new_sp_value > self.regs.sp && value >= 128)
+        {
+            self.regs.f |= FLAG_CARRY;
+        }
+        self.regs.sp = new_sp_value;
+    }
+
     fn sub8(&mut self, value: u8, use_carry: bool) {
         let carry_value = if use_carry && (self.regs.f & FLAG_CARRY) == FLAG_CARRY {
             1
@@ -387,6 +404,11 @@ impl Cpu {
             self.regs.f |= FLAG_HALF;
         }
         self.regs.toggle_zero_flag(result.0);
+        result.0
+    }
+
+    fn dec16(&self, value: u16) -> u16 {
+        let result = Wrapping(value) - Wrapping(1u16);
         result.0
     }
 
@@ -652,4 +674,49 @@ fn test_inc16() {
     let cpu: Cpu = Default::default();
     let value = cpu.inc16(0x4241);
     assert_eq!(value, 0x4242);
+
+    let value2 = cpu.inc16(0xFFFF);
+    assert_eq!(value2, 0);
+}
+
+#[test]
+fn test_dec16() {
+    let cpu: Cpu = Default::default();
+    let value = cpu.dec16(0x4243);
+    assert_eq!(value, 0x4242);
+
+    let value2 = cpu.dec16(0);
+    assert_eq!(value2, 0xFFFF);
+}
+
+#[test]
+fn test_add_sp() {
+    let mut cpu: Cpu = Default::default();
+
+    // add positive value
+    cpu.regs.sp = 0x32;
+    cpu.add_sp(0x11);
+    assert_eq!(cpu.regs.sp, 0x43);
+
+    // add negative value
+    cpu.add_sp(0xFF);
+    assert_eq!(cpu.regs.sp, 0x42);
+
+    // check half flag
+    cpu.add_sp(0x0E);
+    assert_eq!(cpu.regs.sp, 0x50);
+    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+
+    // check carry flag
+    cpu.regs.sp = 0xFFFF;
+    cpu.regs.f = 0;
+    cpu.add_sp(1);
+    assert_eq!(cpu.regs.sp, 0x00);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+
+    cpu.regs.sp = 1;
+    cpu.regs.f = 0;
+    cpu.add_sp(0xFE);
+    assert_eq!(cpu.regs.sp, 0xFFFF);
+    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
 }
