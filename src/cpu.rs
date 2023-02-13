@@ -1,4 +1,4 @@
-use std::{default, io::WriterPanicked, num::Wrapping, rc::Rc};
+use std::num::Wrapping;
 
 use crate::memory::Memory;
 
@@ -218,22 +218,14 @@ fn test_clear_flag() {
     assert_eq!(regs.f & FLAG_HALF, FLAG_HALF);
 }
 
-struct CPU {
+#[derive(Default)]
+struct Cpu {
     regs: Registers,
-    mem: Rc<Memory>,
+    mem: Box<Memory>,
 }
 
-impl Default for CPU {
-    fn default() -> Self {
-        Self {
-            regs: Default::default(),
-            mem: Default::default(),
-        }
-    }
-}
-
-impl CPU {
-    fn add(&mut self, value: u8, use_carry: bool) {
+impl Cpu {
+    fn add8(&mut self, value: u8, use_carry: bool) {
         let carry_value = if use_carry && (self.regs.f & FLAG_CARRY) == FLAG_CARRY {
             1u32
         } else {
@@ -247,7 +239,22 @@ impl CPU {
         self.regs.toggle_half_flag(result);
     }
 
-    fn sub(&mut self, value: u8, use_carry: bool) {
+    fn add16(&mut self, addr: u16, value: u16) {
+        let mem_value = self.mem.read16(addr);
+        let result = (mem_value as u32) + (value as u32);
+        self.regs.f &= !FLAG_SUB;
+
+        if (result & 0x1_0000) != 0 {
+            self.regs.f |= FLAG_CARRY;
+        }
+
+        if (result & 0x1000) != 0 {
+            self.regs.f |= FLAG_HALF;
+        }
+        self.mem.write16(addr, result as u16);
+    }
+
+    fn sub8(&mut self, value: u8, use_carry: bool) {
         let carry_value = if use_carry && (self.regs.f & FLAG_CARRY) == FLAG_CARRY {
             1
         } else {
@@ -273,7 +280,7 @@ impl CPU {
     /// Set Z, C, H flags
     ///
     fn add_imm(&mut self, value: u8) {
-        self.add(value, false);
+        self.add8(value, false);
     }
 
     /// Add value and Carry to register A
@@ -283,7 +290,7 @@ impl CPU {
     /// Set Z, C, H flags
     ///
     fn adc_imm(&mut self, value: u8) {
-        self.add(value, true);
+        self.add8(value, true);
     }
 
     /// Subtract value from register A
@@ -293,7 +300,7 @@ impl CPU {
     /// Set Z, C, H flags
     ///
     fn sub_imm(&mut self, value: u8) {
-        self.sub(value, false);
+        self.sub8(value, false);
     }
 
     /// Subtract value and carry from register A
@@ -303,7 +310,7 @@ impl CPU {
     /// Set Z, C, H flags
     ///
     fn sbc_imm(&mut self, value: u8) {
-        self.sub(value, true);
+        self.sub8(value, true);
     }
 
     /// Perform binary AND operation
@@ -346,7 +353,7 @@ impl CPU {
     ///
     fn cp_imm(&mut self, value: u8) {
         let save = self.regs.a;
-        self.sub(value, false);
+        self.sub8(value, false);
         self.regs.a = save;
     }
 
@@ -355,11 +362,16 @@ impl CPU {
     /// Set H and Z flags
     ///
     /// Return new value
-    fn inc(&mut self, value: u8) -> u8 {
+    fn inc8(&mut self, value: u8) -> u8 {
         let result = ((value as u32) + 1) as u8;
         self.regs.f = 0;
         self.regs.toggle_half_flag(result as u32);
-        self.regs.toggle_zero_flag(result as u8);
+        self.regs.toggle_zero_flag(result);
+        result
+    }
+
+    fn inc16(&self, value: u16) -> u16 {
+        let result = ((value as u32) + 1) as u16;
         result
     }
 
@@ -374,7 +386,7 @@ impl CPU {
         if (value & 0x0F) == 0 {
             self.regs.f |= FLAG_HALF;
         }
-        self.regs.toggle_zero_flag(result.0 as u8);
+        self.regs.toggle_zero_flag(result.0);
         result.0
     }
 
@@ -405,7 +417,7 @@ impl CPU {
 
 #[test]
 fn test_add_imm() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.add_imm(0);
     assert_eq!(cpu.regs.a, 0);
     assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
@@ -432,7 +444,7 @@ fn test_add_imm() {
 
 #[test]
 fn test_adc_imm() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.adc_imm(0);
     assert_eq!(cpu.regs.a, 0);
     assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
@@ -454,7 +466,7 @@ fn test_adc_imm() {
 
 #[test]
 fn test_sub_imm() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.add_imm(10);
     assert_eq!(cpu.regs.a, 10);
     assert_eq!(cpu.regs.f, 0);
@@ -474,7 +486,7 @@ fn test_sub_imm() {
 
 #[test]
 fn test_sbc_imm() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.adc_imm(0x80);
     assert_eq!(cpu.regs.a, 0x80);
     assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
@@ -496,7 +508,7 @@ fn test_sbc_imm() {
 
 #[test]
 fn test_and_imm() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.regs.a = 0x05;
 
     cpu.and_imm(1);
@@ -512,7 +524,7 @@ fn test_and_imm() {
 
 #[test]
 fn test_xor_imm() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.regs.a = 0x05;
 
     cpu.xor_imm(4);
@@ -526,7 +538,7 @@ fn test_xor_imm() {
 
 #[test]
 fn test_or_imm() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
 
     cpu.or_imm(0);
     assert_eq!(cpu.regs.a, 0);
@@ -539,7 +551,7 @@ fn test_or_imm() {
 
 #[test]
 fn test_cp_imm() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.add_imm(10);
     cpu.cp_imm(10);
     assert_eq!(cpu.regs.a, 10);
@@ -549,9 +561,9 @@ fn test_cp_imm() {
 
 #[test]
 fn test_inc() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.regs.a = 0xF;
-    cpu.regs.a = cpu.inc(cpu.regs.a);
+    cpu.regs.a = cpu.inc8(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x10);
     assert_eq!(cpu.regs.f & FLAG_SUB, 0);
     assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
@@ -559,7 +571,7 @@ fn test_inc() {
     assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
 
     cpu.regs.a = 0xFF;
-    cpu.regs.a = cpu.inc(cpu.regs.a);
+    cpu.regs.a = cpu.inc8(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x00);
     assert_eq!(cpu.regs.f & FLAG_SUB, 0);
     assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
@@ -569,7 +581,7 @@ fn test_inc() {
 
 #[test]
 fn test_dec() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.regs.a = 0x11;
     cpu.regs.a = cpu.dec(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x10);
@@ -588,7 +600,7 @@ fn test_dec() {
 
 #[test]
 fn test_daa() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.regs.a = 0x55;
     cpu.add_imm(0x11);
     cpu.daa();
@@ -616,11 +628,28 @@ fn test_daa() {
 
 #[test]
 fn test_cpl() {
-    let mut cpu: CPU = Default::default();
+    let mut cpu: Cpu = Default::default();
     cpu.regs.a = 0x55;
     cpu.cpl();
 
     assert_eq!(cpu.regs.a, 0xAA);
     assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
     assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+}
+
+#[test]
+fn test_add16() {
+    let mut cpu: Cpu = Default::default();
+    cpu.add16(0xC000, 0xBABD);
+    cpu.add16(0xC000, 1);
+
+    assert_eq!(cpu.mem.read8(0xC000), 0xBE);
+    assert_eq!(cpu.mem.read8(0xC001), 0xBA);
+}
+
+#[test]
+fn test_inc16() {
+    let cpu: Cpu = Default::default();
+    let value = cpu.inc16(0x4241);
+    assert_eq!(value, 0x4242);
 }
