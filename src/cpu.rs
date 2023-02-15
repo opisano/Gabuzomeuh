@@ -435,6 +435,33 @@ impl Cpu {
         self.regs.a = !self.regs.a;
         self.regs.f = FLAG_SUB | FLAG_HALF;
     }
+
+    /// Write the value of Stack pointer at specified address
+    ///
+    /// (addr) := SP
+    ///
+    fn store_sp(&mut self, addr: u16) {
+        self.mem.write16(addr, self.regs.sp);
+    }
+
+    /// Copy HL into SP
+    ///
+    /// SP := HL
+    ///
+    fn load_sp_hl(&mut self) {
+        self.regs.sp = self.regs.get_hl();
+    }
+
+    fn push(&mut self, val: u16) {
+        self.regs.sp -= 2;
+        self.mem.write16(self.regs.sp, val);
+    }
+
+    fn pop(&mut self) -> u16 {
+        let temp = self.mem.read16(self.regs.sp);
+        self.regs.sp += 2;
+        temp
+    }
 }
 
 #[test]
@@ -719,4 +746,45 @@ fn test_add_sp() {
     cpu.add_sp(0xFE);
     assert_eq!(cpu.regs.sp, 0xFFFF);
     assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+}
+
+#[test]
+fn test_store_sp() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.sp = 0x0042;
+
+    assert_eq!(cpu.mem.read16(0xC000), 0);
+    cpu.store_sp(0xC000);
+    assert_eq!(cpu.mem.read16(0xC000), 0x0042);
+}
+
+#[test]
+fn test_load_sp_hl() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.set_hl(0x1234);
+
+    assert_eq!(cpu.regs.sp, 0);
+    cpu.load_sp_hl();
+    assert_eq!(cpu.regs.sp, 0x1234);
+}
+
+#[test]
+fn test_push() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.sp = 0xC002;
+    cpu.push(0x1234);
+
+    assert_eq!(cpu.regs.sp, 0xC000);
+    assert_eq!(cpu.mem.read16(cpu.regs.sp), 0x1234);
+}
+
+#[test]
+fn test_pop() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.sp = 0xC000;
+    cpu.mem.write16(cpu.regs.sp, 0x1234);
+    let value = cpu.pop();
+
+    assert_eq!(cpu.regs.sp, 0xC002);
+    assert_eq!(value, 0x1234);
 }
