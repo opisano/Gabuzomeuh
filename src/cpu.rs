@@ -462,6 +462,24 @@ impl Cpu {
         self.regs.sp += 2;
         temp
     }
+
+    fn bit(&mut self, b: u8, val: u8) {
+        let bit_index = b & 0b111;
+        let result = val & (1 << bit_index);
+        self.regs.f &= !FLAG_SUB;
+        self.regs.f |= FLAG_HALF;
+        if result == 0 {
+            self.regs.f |= FLAG_ZERO;
+        } else {
+            self.regs.f &= !FLAG_ZERO;
+        }
+    }
+
+    fn set(&self, b: u8, val: u8) -> u8 {
+        let bit_index: u8 = b & 0b111;
+        let bit_mask = 1 << bit_index;
+        val | bit_mask
+    }
 }
 
 #[test]
@@ -787,4 +805,41 @@ fn test_pop() {
 
     assert_eq!(cpu.regs.sp, 0xC002);
     assert_eq!(value, 0x1234);
+}
+
+#[test]
+fn test_bit() {
+    let mut cpu: Cpu = Default::default();
+    let val = 0b1000_0000;
+
+    cpu.bit(0, val);
+    assert_eq!(cpu.regs.f, FLAG_HALF | FLAG_ZERO);
+    cpu.bit(1, val);
+    assert_eq!(cpu.regs.f, FLAG_HALF | FLAG_ZERO);
+    cpu.bit(2, val);
+    assert_eq!(cpu.regs.f, FLAG_HALF | FLAG_ZERO);
+    cpu.bit(3, val);
+    assert_eq!(cpu.regs.f, FLAG_HALF | FLAG_ZERO);
+    cpu.bit(4, val);
+    assert_eq!(cpu.regs.f, FLAG_HALF | FLAG_ZERO);
+    cpu.bit(5, val);
+    assert_eq!(cpu.regs.f, FLAG_HALF | FLAG_ZERO);
+    cpu.bit(6, val);
+    assert_eq!(cpu.regs.f, FLAG_HALF | FLAG_ZERO);
+    cpu.bit(7, val);
+    assert_eq!(cpu.regs.f, FLAG_HALF);
+}
+
+#[test]
+fn test_set() {
+    rec_test_bit(0, 0);
+
+    fn rec_test_bit(index: u8, value: u8) {
+        let cpu: Cpu = Default::default();
+        if index < 8 {
+            let result = cpu.set(index, value);
+            assert_eq!(result, (1 << index));
+            rec_test_bit(index + 1, 0);
+        }
+    }
 }
