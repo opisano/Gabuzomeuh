@@ -484,6 +484,124 @@ impl Cpu {
         let bit_mask = 1 << bit_index;
         val | bit_mask
     }
+
+    /// Rotate the content of A to the left
+    ///
+    /// The contents of bit 7 are placed in both Carry and bit 0 of A
+    ///
+    fn rlca(&mut self) {
+        self.regs.a = self.rlc(self.regs.a);
+        self.regs.clear_flag(FLAG_ZERO);
+    }
+
+    /// Rotate the content of val to the left
+    ///
+    /// The contents of bit 7 are placed in both Carry and bit 0
+    ///
+    fn rlc(&mut self, val: u8) -> u8 {
+        let temp = (val as u16) << 1;
+        if temp & 0x100 == 0x100 {
+            self.regs.toggle_flag(FLAG_CARRY);
+            self.regs.clear_flag(FLAG_ZERO);
+            (temp & 0xFF) as u8 | 1
+        } else {
+            self.regs.clear_flag(FLAG_CARRY);
+            self.regs.toggle_zero_flag((temp & 0xFF) as u8);
+            (temp & 0xFF) as u8
+        }
+    }
+
+    /// Rotate the content of A to the left
+    ///
+    /// The contents of bit 7 is placed in Carry
+    /// The previous content of Carry is placed in bit 0 of A.
+    ///
+    fn rla(&mut self) {
+        self.regs.a = self.rl(self.regs.a);
+        self.regs.clear_flag(FLAG_ZERO);
+    }
+
+    /// Rotate the content of val to the left
+    ///
+    /// The contents of bit 7 is placed in Carry
+    /// The previous content of Carry is placed in bit 0
+    ///
+    fn rl(&mut self, val: u8) -> u8 {
+        let carry = if self.regs.isset_flag(FLAG_CARRY) {
+            1u8
+        } else {
+            0u8
+        };
+        let temp = (val as u16) << 1;
+        if temp & 0x100 == 0x100 {
+            self.regs.toggle_flag(FLAG_CARRY);
+        } else {
+            self.regs.clear_flag(FLAG_CARRY);
+        }
+        let result = (temp & 0xFF) as u8 | carry;
+        self.regs.toggle_zero_flag(result);
+        result
+    }
+
+    /// Rotate the content of A to the right
+    ///
+    /// The contents of bit 0 are placed in both Carry and bit 7 of A
+    ///
+    fn rrca(&mut self) {
+        self.regs.a = self.rrc(self.regs.a);
+        self.regs.clear_flag(FLAG_ZERO);
+    }
+
+    /// Rotate the content of val to the right
+    ///
+    /// The contents of bit 0 are placed in both Carry and bit 7
+    ///
+    fn rrc(&mut self, val: u8) -> u8 {
+        let carry = val & 1;
+        if carry == 1 {
+            self.regs.toggle_flag(FLAG_CARRY);
+            self.regs.clear_flag(FLAG_ZERO);
+            (val >> 1) | 0x80
+        } else {
+            self.regs.clear_flag(FLAG_CARRY);
+            self.regs.toggle_zero_flag(val >> 1);
+            (val >> 1)
+        }
+    }
+
+    /// Rotate the content of A to the right
+    ///
+    /// The contents of bit 0 is placed in Carry
+    /// The previous content of Carry is placed in bit 7 of A.
+    ///
+    fn rra(&mut self) {
+        self.regs.a = self.rr(self.regs.a);
+        self.regs.clear_flag(FLAG_ZERO);
+    }
+
+    /// Rotate the content of val to the right
+    ///
+    /// The contents of bit 0 is placed in Carry
+    /// The previous content of Carry is placed in bit 7.
+    ///
+    fn rr(&mut self, val: u8) -> u8 {
+        let carry = val & 1;
+        let h = if self.regs.isset_flag(FLAG_CARRY) {
+            0x80u8
+        } else {
+            0x00u8
+        };
+
+        if carry == 1 {
+            self.regs.toggle_flag(FLAG_CARRY);
+        } else {
+            self.regs.clear_flag(FLAG_CARRY);
+        }
+
+        let result = (val >> 1) | h;
+        self.regs.toggle_zero_flag(result);
+        result
+    }
 }
 
 #[test]
@@ -836,14 +954,83 @@ fn test_bit() {
 
 #[test]
 fn test_set() {
-    rec_test_bit(0, 0);
+    let cpu: Cpu = Default::default();
 
-    fn rec_test_bit(index: u8, value: u8) {
-        let cpu: Cpu = Default::default();
-        if index < 8 {
-            let result = cpu.set(index, value);
-            assert_eq!(result, (1 << index));
-            rec_test_bit(index + 1, 0);
-        }
+    for i in 0..8 {
+        let result = cpu.set(i, 0);
+        assert_eq!(result, (1 << i));
     }
+}
+
+#[test]
+fn test_rlca() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.a = 0x85;
+    cpu.rlca();
+    assert_eq!(cpu.regs.a, 0x0B);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+}
+
+#[test]
+fn test_rlc() {
+    let mut cpu: Cpu = Default::default();
+    let value = cpu.rlc(0x85);
+    assert_eq!(value, 0x0B);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+}
+
+#[test]
+fn test_rla() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.a = 0x95;
+    cpu.regs.toggle_flag(FLAG_CARRY);
+    cpu.rla();
+    assert_eq!(cpu.regs.a, 0x2B);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+}
+
+#[test]
+fn test_rl() {
+    let mut cpu: Cpu = Default::default();
+    let value = cpu.rl(0x80);
+    assert_eq!(value, 0);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(cpu.regs.isset_flag(FLAG_ZERO))
+}
+
+#[test]
+fn test_rrca() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.a = 0x3B;
+    cpu.rrca();
+    assert_eq!(cpu.regs.a, 0x9D);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+}
+
+#[test]
+fn test_rrc() {
+    let mut cpu: Cpu = Default::default();
+    let value = cpu.rrc(1);
+    assert_eq!(value, 0x80);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO))
+}
+
+#[test]
+fn test_rra() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.a = 0x81;
+    cpu.rra();
+    assert_eq!(cpu.regs.a, 0x40);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+}
+
+#[test]
+fn test_rr() {
+    let mut cpu: Cpu = Default::default();
+    let value = cpu.rr(1);
+    assert_eq!(value, 0);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
 }
