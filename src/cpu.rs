@@ -94,6 +94,10 @@ impl Registers {
         (self.l as u16) | ((self.h as u16) << 8)
     }
 
+    fn isset_flag(&self, flag: u8) -> bool {
+        self.f & flag == flag
+    }
+
     /// Toggle a flag
     fn toggle_flag(&mut self, flag: u8) {
         self.f |= flag
@@ -214,8 +218,8 @@ fn test_clear_flag() {
     let mut regs: Registers = Default::default();
     regs.f = FLAG_CARRY | FLAG_HALF;
     regs.clear_flag(FLAG_CARRY);
-    assert_eq!(regs.f & FLAG_CARRY, 0);
-    assert_eq!(regs.f & FLAG_HALF, FLAG_HALF);
+    assert!(!regs.isset_flag(FLAG_CARRY));
+    assert!(regs.isset_flag(FLAG_HALF));
 }
 
 #[derive(Default)]
@@ -226,7 +230,7 @@ struct Cpu {
 
 impl Cpu {
     fn add8(&mut self, value: u8, use_carry: bool) {
-        let carry_value = if use_carry && (self.regs.f & FLAG_CARRY) == FLAG_CARRY {
+        let carry_value = if use_carry && self.regs.isset_flag(FLAG_CARRY) {
             1u32
         } else {
             0u32
@@ -242,14 +246,14 @@ impl Cpu {
     fn add16(&mut self, addr: u16, value: u16) {
         let mem_value = self.mem.read16(addr);
         let result = (mem_value as u32) + (value as u32);
-        self.regs.f &= !FLAG_SUB;
+        self.regs.clear_flag(FLAG_SUB);
 
         if (result & 0x1_0000) != 0 {
-            self.regs.f |= FLAG_CARRY;
+            self.regs.toggle_flag(FLAG_CARRY);
         }
 
         if (result & 0x1000) != 0 {
-            self.regs.f |= FLAG_HALF;
+            self.regs.toggle_flag(FLAG_HALF);
         }
         self.mem.write16(addr, result as u16);
     }
@@ -266,7 +270,7 @@ impl Cpu {
         if (new_sp_value < self.regs.sp && value < 128)
             || (new_sp_value > self.regs.sp && value >= 128)
         {
-            self.regs.f |= FLAG_CARRY;
+            self.regs.toggle_flag(FLAG_CARRY);
         }
         self.regs.sp = new_sp_value;
     }
@@ -282,10 +286,10 @@ impl Cpu {
         self.regs.f = FLAG_SUB;
         self.regs.toggle_zero_flag(result.0);
         if (self.regs.a & 0x0F) < (value & 0x0F) + carry_value {
-            self.regs.f |= FLAG_HALF;
+            self.regs.toggle_flag(FLAG_HALF)
         }
         if (self.regs.a as u32) < (value as u32) + (carry_value as u32) {
-            self.regs.f |= FLAG_CARRY;
+            self.regs.toggle_flag(FLAG_CARRY);
         }
         self.regs.a = result.0;
     }
@@ -401,7 +405,7 @@ impl Cpu {
         let result = Wrapping(value) - Wrapping(1u8);
         self.regs.f = FLAG_SUB;
         if (value & 0x0F) == 0 {
-            self.regs.f |= FLAG_HALF;
+            self.regs.toggle_flag(FLAG_HALF);
         }
         self.regs.toggle_zero_flag(result.0);
         result.0
@@ -415,19 +419,19 @@ impl Cpu {
     fn daa(&mut self) {
         let mut a = Wrapping(self.regs.a);
 
-        if (a.0 & 0x0F) > 0x09 || (self.regs.f & FLAG_HALF) == FLAG_HALF {
+        if (a.0 & 0x0F) > 0x09 || self.regs.isset_flag(FLAG_HALF) {
             a += Wrapping(0x06);
         }
 
-        if (a.0 & 0xF0) > 0x90 || (self.regs.f & FLAG_CARRY) == FLAG_CARRY {
+        if (a.0 & 0xF0) > 0x90 || self.regs.isset_flag(FLAG_CARRY) {
             if (a.0 as u32) + 0x60 > 99 {
-                self.regs.f |= FLAG_CARRY;
+                self.regs.toggle_flag(FLAG_CARRY);
             }
             a += Wrapping(0x60);
         }
 
         self.regs.toggle_zero_flag(a.0);
-        self.regs.f &= !FLAG_HALF;
+        self.regs.clear_flag(FLAG_HALF);
         self.regs.a = a.0;
     }
 
@@ -466,12 +470,12 @@ impl Cpu {
     fn bit(&mut self, b: u8, val: u8) {
         let bit_index = b & 0b111;
         let result = val & (1 << bit_index);
-        self.regs.f &= !FLAG_SUB;
-        self.regs.f |= FLAG_HALF;
+        self.regs.clear_flag(FLAG_SUB);
+        self.regs.toggle_flag(FLAG_HALF);
         if result == 0 {
-            self.regs.f |= FLAG_ZERO;
+            self.regs.toggle_flag(FLAG_ZERO);
         } else {
-            self.regs.f &= !FLAG_ZERO;
+            self.regs.clear_flag(FLAG_ZERO);
         }
     }
 
@@ -487,26 +491,26 @@ fn test_add_imm() {
     let mut cpu: Cpu = Default::default();
     cpu.add_imm(0);
     assert_eq!(cpu.regs.a, 0);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.add_imm(0x80);
     assert_eq!(cpu.regs.a, 0x80);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.add_imm(0x80);
     assert_eq!(cpu.regs.a, 0x00);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 
     cpu.add_imm(0x08);
     assert_eq!(cpu.regs.a, 0x08);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
-    assert_eq!(cpu.regs.f & FLAG_HALF, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(!cpu.regs.isset_flag(FLAG_HALF));
 
     cpu.add_imm(0x08);
     assert_eq!(cpu.regs.a, 0x10);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
 }
 
 #[test]
@@ -514,21 +518,21 @@ fn test_adc_imm() {
     let mut cpu: Cpu = Default::default();
     cpu.adc_imm(0);
     assert_eq!(cpu.regs.a, 0);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.adc_imm(0x80);
     assert_eq!(cpu.regs.a, 0x80);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.adc_imm(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x00);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 
     cpu.adc_imm(0x00);
     assert_eq!(cpu.regs.a, 0x01);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
 }
 
 #[test]
@@ -540,15 +544,15 @@ fn test_sub_imm() {
 
     cpu.sub_imm(10);
     assert_eq!(cpu.regs.a, 0);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.sub_imm(1);
     assert_eq!(cpu.regs.a, 0xFF);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 }
 
 #[test]
@@ -556,21 +560,21 @@ fn test_sbc_imm() {
     let mut cpu: Cpu = Default::default();
     cpu.adc_imm(0x80);
     assert_eq!(cpu.regs.a, 0x80);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.adc_imm(0x85);
     assert_eq!(cpu.regs.a, 5);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 
     cpu.sbc_imm(2);
     assert_eq!(cpu.regs.a, 2);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
 
     cpu.sbc_imm(3);
     assert_eq!(cpu.regs.a, 0xFF);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
 }
 
 #[test]
@@ -580,13 +584,13 @@ fn test_and_imm() {
 
     cpu.and_imm(1);
     assert_eq!(cpu.regs.a, 1);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.and_imm(0);
     assert_eq!(cpu.regs.a, 0);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
 }
 
 #[test]
@@ -596,11 +600,11 @@ fn test_xor_imm() {
 
     cpu.xor_imm(4);
     assert_eq!(cpu.regs.a, 1);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.xor_imm(1);
     assert_eq!(cpu.regs.a, 0);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
 }
 
 #[test]
@@ -609,11 +613,11 @@ fn test_or_imm() {
 
     cpu.or_imm(0);
     assert_eq!(cpu.regs.a, 0);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.or_imm(0x0A);
     assert_eq!(cpu.regs.a, 0x0A);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 }
 
 #[test]
@@ -622,8 +626,8 @@ fn test_cp_imm() {
     cpu.add_imm(10);
     cpu.cp_imm(10);
     assert_eq!(cpu.regs.a, 10);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
 }
 
 #[test]
@@ -632,18 +636,18 @@ fn test_inc() {
     cpu.regs.a = 0xF;
     cpu.regs.a = cpu.inc8(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x10);
-    assert_eq!(cpu.regs.f & FLAG_SUB, 0);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_SUB));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.regs.a = 0xFF;
     cpu.regs.a = cpu.inc8(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x00);
-    assert_eq!(cpu.regs.f & FLAG_SUB, 0);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, FLAG_ZERO);
-    assert_eq!(cpu.regs.f & FLAG_HALF, 0);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, 0)
+    assert!(!cpu.regs.isset_flag(FLAG_SUB));
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(!cpu.regs.isset_flag(FLAG_HALF));
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
 }
 
 #[test]
@@ -652,17 +656,17 @@ fn test_dec() {
     cpu.regs.a = 0x11;
     cpu.regs.a = cpu.dec(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x10);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.regs.a = 0x00;
     cpu.regs.a = cpu.dec(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0xFF);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
-    assert_eq!(cpu.regs.f & FLAG_ZERO, 0);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, 0)
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
 }
 
 #[test]
@@ -672,25 +676,25 @@ fn test_daa() {
     cpu.add_imm(0x11);
     cpu.daa();
     assert_eq!(cpu.regs.a, 0x66);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
 
     cpu.regs.a = 0x59;
     cpu.add_imm(0x12);
     cpu.daa();
     assert_eq!(cpu.regs.a, 0x71);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
 
     cpu.regs.a = 0x90;
     cpu.add_imm(0x10);
     cpu.daa();
     assert_eq!(cpu.regs.a, 0x00);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 
     cpu.regs.a = 0x99;
     cpu.add_imm(0x01);
     cpu.daa();
     assert_eq!(cpu.regs.a, 0x00);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 }
 
 #[test]
@@ -700,8 +704,8 @@ fn test_cpl() {
     cpu.cpl();
 
     assert_eq!(cpu.regs.a, 0xAA);
-    assert_eq!(cpu.regs.f & FLAG_SUB, FLAG_SUB);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+    assert!(cpu.regs.isset_flag(FLAG_SUB));
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
 }
 
 #[test]
@@ -750,20 +754,20 @@ fn test_add_sp() {
     // check half flag
     cpu.add_sp(0x0E);
     assert_eq!(cpu.regs.sp, 0x50);
-    assert_eq!(cpu.regs.f & FLAG_HALF, FLAG_HALF);
+    assert!(cpu.regs.isset_flag(FLAG_HALF));
 
     // check carry flag
     cpu.regs.sp = 0xFFFF;
     cpu.regs.f = 0;
     cpu.add_sp(1);
     assert_eq!(cpu.regs.sp, 0x00);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 
     cpu.regs.sp = 1;
     cpu.regs.f = 0;
     cpu.add_sp(0xFE);
     assert_eq!(cpu.regs.sp, 0xFFFF);
-    assert_eq!(cpu.regs.f & FLAG_CARRY, FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 }
 
 #[test]
