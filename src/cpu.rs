@@ -647,6 +647,14 @@ impl Cpu {
         self.regs.toggle_zero_flag(result);
         result
     }
+
+    fn ccf(&mut self) {
+        if self.regs.isset_flag(FLAG_CARRY) {
+            self.regs.clear_flag(FLAG_CARRY);
+        } else {
+            self.regs.toggle_flag(FLAG_CARRY);
+        }
+    }
 }
 
 #[test]
@@ -1123,4 +1131,17 @@ fn test_swap() {
     assert!(!cpu.regs.isset_flag(FLAG_CARRY));
     assert!(!cpu.regs.isset_flag(FLAG_SUB));
     assert!(!cpu.regs.isset_flag(FLAG_HALF));
+}
+
+#[test]
+fn test_ccf() {
+    let mut cpu: Cpu = Default::default();
+    cpu.regs.toggle_flag(FLAG_CARRY);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+
+    cpu.ccf();
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
+
+    cpu.ccf();
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
 }
