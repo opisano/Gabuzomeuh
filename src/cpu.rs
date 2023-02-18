@@ -602,6 +602,51 @@ impl Cpu {
         self.regs.toggle_zero_flag(result);
         result
     }
+
+    fn sla(&mut self, val: u8) -> u8 {
+        let result: u32 = (val as u32) << 1;
+        let byte_result = (result & 0xFF) as u8;
+        self.regs.toggle_carry_flag(result);
+        self.regs.toggle_zero_flag(byte_result);
+        self.regs.clear_flag(FLAG_HALF);
+        self.regs.clear_flag(FLAG_SUB);
+        byte_result
+    }
+
+    fn sra(&mut self, val: u8) -> u8 {
+        let carry = val & 1;
+        let result = (val >> 1) | (val & 0x80);
+        self.regs.clear_flag(FLAG_HALF);
+        self.regs.clear_flag(FLAG_SUB);
+        self.regs.toggle_zero_flag(result);
+        if carry == 0 {
+            self.regs.clear_flag(FLAG_CARRY);
+        } else {
+            self.regs.toggle_flag(FLAG_CARRY);
+        }
+        result
+    }
+
+    fn srl(&mut self, val: u8) -> u8 {
+        let carry = val & 1;
+        let result = (val >> 1);
+        self.regs.clear_flag(FLAG_HALF);
+        self.regs.clear_flag(FLAG_SUB);
+        self.regs.toggle_zero_flag(result);
+        if carry == 0 {
+            self.regs.clear_flag(FLAG_CARRY);
+        } else {
+            self.regs.toggle_flag(FLAG_CARRY);
+        }
+        result
+    }
+
+    fn swap(&mut self, val: u8) -> u8 {
+        let result = ((val >> 4) & 0x0F) | ((val << 4) & 0xF0);
+        self.regs.f = 0;
+        self.regs.toggle_zero_flag(result);
+        result
+    }
 }
 
 #[test]
@@ -1033,4 +1078,49 @@ fn test_rr() {
     assert_eq!(value, 0);
     assert!(cpu.regs.isset_flag(FLAG_CARRY));
     assert!(cpu.regs.isset_flag(FLAG_ZERO));
+}
+
+#[test]
+fn test_sla() {
+    let mut cpu: Cpu = Default::default();
+    let value = cpu.sla(0x80);
+    assert_eq!(value, 0);
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+}
+
+#[test]
+fn test_sra() {
+    let mut cpu: Cpu = Default::default();
+    let value = cpu.sra(0x8A);
+    assert_eq!(value, 0xC5);
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+}
+
+#[test]
+fn test_srl() {
+    let mut cpu: Cpu = Default::default();
+    let value = cpu.srl(0x01);
+    assert_eq!(value, 0x00);
+    assert!(cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
+}
+
+#[test]
+fn test_swap() {
+    let mut cpu: Cpu = Default::default();
+    let value = cpu.swap(0xA5);
+    assert_eq!(value, 0x5A);
+    assert!(!cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(!cpu.regs.isset_flag(FLAG_SUB));
+    assert!(!cpu.regs.isset_flag(FLAG_HALF));
+
+    let value2 = cpu.swap(0x00);
+    assert_eq!(value2, 0x00);
+    assert!(cpu.regs.isset_flag(FLAG_ZERO));
+    assert!(!cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(!cpu.regs.isset_flag(FLAG_SUB));
+    assert!(!cpu.regs.isset_flag(FLAG_HALF));
 }
