@@ -226,6 +226,8 @@ fn test_clear_flag() {
 struct Cpu {
     regs: Registers,
     mem: Box<Memory>,
+    interrupts: bool,
+    enabled: bool,
 }
 
 impl Cpu {
@@ -241,6 +243,11 @@ impl Cpu {
         self.regs.toggle_zero_flag(result as u8);
         self.regs.toggle_carry_flag(result);
         self.regs.toggle_half_flag(result);
+    }
+
+    fn add_hl(&mut self, value: u16) {
+        self.regs.set_hl(self.regs.get_hl().wrapping_add(value));
+        self.regs.clear_flag(FLAG_SUB);
     }
 
     fn add16(&mut self, addr: u16, value: u16) {
@@ -383,7 +390,7 @@ impl Cpu {
     /// Set H and Z flags
     ///
     /// Return new value
-    fn inc8(&mut self, value: u8) -> u8 {
+    fn inc(&mut self, value: u8) -> u8 {
         let result = ((value as u32) + 1) as u8;
         self.regs.f = 0;
         self.regs.toggle_half_flag(result as u32);
@@ -603,6 +610,7 @@ impl Cpu {
         result
     }
 
+    /// Shift left arithmetic
     fn sla(&mut self, val: u8) -> u8 {
         let result: u32 = (val as u32) << 1;
         let byte_result = (result & 0xFF) as u8;
@@ -613,6 +621,7 @@ impl Cpu {
         byte_result
     }
 
+    /// Shift right arithmetic
     fn sra(&mut self, val: u8) -> u8 {
         let carry = val & 1;
         let result = (val >> 1) | (val & 0x80);
@@ -627,6 +636,7 @@ impl Cpu {
         result
     }
 
+    /// Shift right logical
     fn srl(&mut self, val: u8) -> u8 {
         let carry = val & 1;
         let result = (val >> 1);
@@ -641,6 +651,7 @@ impl Cpu {
         result
     }
 
+    /// Swap the nibbles in a byte
     fn swap(&mut self, val: u8) -> u8 {
         let result = ((val >> 4) & 0x0F) | ((val << 4) & 0xF0);
         self.regs.f = 0;
@@ -648,12 +659,1133 @@ impl Cpu {
         result
     }
 
+    /// Inverts the carry flag
     fn ccf(&mut self) {
         if self.regs.isset_flag(FLAG_CARRY) {
             self.regs.clear_flag(FLAG_CARRY);
         } else {
             self.regs.toggle_flag(FLAG_CARRY);
         }
+    }
+
+    fn jr(&mut self) {
+        let offset = self.fetch_byte() as i8;
+        self.regs.pc = ((self.regs.pc as u32 as i32) + (offset as i32)) as u16;
+    }
+
+    fn call(&mut self, val: u16) {
+        self.regs.sp -= 2;
+        self.mem.write16(self.regs.sp, val);
+        self.regs.pc = val;
+    }
+
+    fn ret(&mut self) {
+        self.regs.pc = self.mem.read16(self.regs.sp);
+        self.regs.sp += 2;
+    }
+
+    fn rst(&mut self, val: u8) {
+        self.push(self.regs.pc);
+        self.regs.pc = val as u16;
+    }
+
+    /// Read the next byte from PC
+    ///
+    /// PC is incremented
+    fn fetch_byte(&mut self) -> u8 {
+        let b = self.mem.read8(self.regs.pc);
+        self.regs.pc = self.regs.pc.wrapping_add(1);
+        b
+    }
+
+    fn fetch_word(&mut self) -> u16 {
+        let w = self.mem.read16(self.regs.pc);
+        self.regs.pc = self.regs.pc.wrapping_add(2);
+        w
+    }
+
+    fn execute(&mut self) -> u32 {
+        let opcode = self.fetch_byte();
+        match opcode {
+            0x00 => 1,
+            0x01 => {
+                let val = self.fetch_word();
+                self.regs.set_bc(val);
+                3
+            }
+            0x02 => {
+                self.mem.write8(self.regs.get_bc(), self.regs.a);
+                2
+            }
+            0x03 => {
+                self.regs.set_bc(self.inc16(self.regs.get_bc()));
+                2
+            }
+            0x04 => {
+                self.regs.b = self.inc(self.regs.b);
+                1
+            }
+            0x05 => {
+                self.regs.b = self.dec(self.regs.b);
+                1
+            }
+            0x06 => {
+                self.regs.b = self.fetch_byte();
+                2
+            }
+            0x07 => {
+                self.rlca();
+                1
+            }
+            0x08 => {
+                let addr = self.fetch_word();
+                self.mem.write16(addr, self.regs.sp);
+                5
+            }
+            0x09 => {
+                self.add_hl(self.regs.get_bc());
+                2
+            }
+            0x0A => {
+                let addr = self.regs.get_bc();
+                self.regs.a = self.mem.read8(addr);
+                2
+            }
+            0x0B => {
+                self.regs.set_bc(self.dec16(self.regs.get_bc()));
+                2
+            }
+            0x0C => {
+                self.regs.c = self.inc(self.regs.c);
+                1
+            }
+            0x0D => {
+                self.regs.c = self.dec(self.regs.c);
+                1
+            }
+            0x0E => {
+                self.regs.c = self.fetch_byte();
+                2
+            }
+            0x0F => {
+                self.rrca();
+                1
+            }
+            0x10 => {
+                self.enabled = false;
+                1
+            }
+            0x11 => {
+                let val = self.fetch_word();
+                self.regs.set_de(val);
+                3
+            }
+            0x12 => {
+                self.mem.write8(self.regs.get_de(), self.regs.a);
+                2
+            }
+            0x13 => {
+                self.regs.set_de(self.inc16(self.regs.get_de()));
+                2
+            }
+            0x14 => {
+                self.regs.d = self.inc(self.regs.d);
+                1
+            }
+            0x15 => {
+                self.regs.d = self.dec(self.regs.d);
+                1
+            }
+            0x16 => {
+                self.regs.d = self.fetch_byte();
+                2
+            }
+            0x17 => {
+                self.rla();
+                1
+            }
+            0x18 => {
+                self.jr();
+                3
+            }
+            0x19 => {
+                self.add_hl(self.regs.get_de());
+                2
+            }
+            0x1A => {
+                let addr = self.regs.get_de();
+                self.regs.a = self.mem.read8(addr);
+                2
+            }
+            0x1B => {
+                self.regs.set_bc(self.dec16(self.regs.get_bc()));
+                2
+            }
+            0x1C => {
+                self.regs.e = self.inc(self.regs.e);
+                1
+            }
+            0x1D => {
+                self.regs.e = self.dec(self.regs.e);
+                1
+            }
+            0x1E => {
+                self.regs.e = self.fetch_byte();
+                2
+            }
+            0x1F => {
+                self.rra();
+                1
+            }
+            0x20 => {
+                if !self.regs.isset_flag(FLAG_ZERO) {
+                    self.jr();
+                    3
+                } else {
+                    2
+                }
+            }
+            0x21 => {
+                let val = self.fetch_word();
+                self.regs.set_hl(val);
+                3
+            }
+            0x22 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.a);
+                self.regs.set_hl(self.regs.get_hl().wrapping_add(1));
+                2
+            }
+            0x23 => {
+                self.regs.set_hl(self.inc16(self.regs.get_hl()));
+                2
+            }
+            0x24 => {
+                self.regs.h = self.inc(self.regs.h);
+                1
+            }
+            0x25 => {
+                self.regs.h = self.dec(self.regs.h);
+                1
+            }
+            0x26 => {
+                self.regs.h = self.fetch_byte();
+                2
+            }
+            0x27 => {
+                self.daa();
+                1
+            }
+            0x28 => {
+                if self.regs.isset_flag(FLAG_ZERO) {
+                    self.jr();
+                    3
+                } else {
+                    2
+                }
+            }
+            0x29 => {
+                self.add_hl(self.regs.get_hl());
+                2
+            }
+            0x2A => {
+                self.regs.a = self.mem.read8(self.regs.get_hl());
+                self.regs.set_hl(self.regs.get_hl().wrapping_add(1));
+                2
+            }
+            0x2B => {
+                self.regs.set_hl(self.dec16(self.regs.get_hl()));
+                2
+            }
+            0x2C => {
+                self.regs.l = self.inc(self.regs.l);
+                1
+            }
+            0x2D => {
+                self.regs.l = self.dec(self.regs.l);
+                1
+            }
+            0x2E => {
+                self.regs.l = self.fetch_byte();
+                2
+            }
+            0x2F => {
+                self.cpl();
+                1
+            }
+            0x30 => {
+                if !self.regs.isset_flag(FLAG_CARRY) {
+                    self.jr();
+                    3
+                } else {
+                    2
+                }
+            }
+            0x31 => {
+                let val = self.fetch_word();
+                self.regs.sp = val;
+                3
+            }
+            0x32 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.a);
+                self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
+                2
+            }
+            0x33 => {
+                self.regs.sp = self.inc16(self.regs.sp);
+                2
+            }
+            0x34 => {
+                let addr = self.regs.get_hl();
+                let val = self.inc(self.mem.read8(addr));
+                self.mem.write8(addr, val);
+                3
+            }
+            0x35 => {
+                let addr = self.regs.get_hl();
+                let val = self.dec(self.mem.read8(addr));
+                self.mem.write8(addr, val);
+                3
+            }
+            0x36 => {
+                let val = self.fetch_byte();
+                self.mem.write8(self.regs.get_hl(), val);
+                3
+            }
+            0x37 => {
+                self.regs.toggle_flag(FLAG_HALF);
+                1
+            }
+            0x38 => {
+                if self.regs.isset_flag(FLAG_CARRY) {
+                    self.jr();
+                    3
+                } else {
+                    2
+                }
+            }
+            0x39 => {
+                self.add_hl(self.regs.sp);
+                2
+            }
+            0x3A => {
+                self.regs.a = self.mem.read8(self.regs.get_hl());
+                self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
+                2
+            }
+            0x3B => {
+                self.regs.sp = self.dec16(self.regs.sp);
+                2
+            }
+            0x3C => {
+                self.regs.a = self.inc(self.regs.a);
+                1
+            }
+            0x3D => {
+                self.regs.a = self.dec(self.regs.a);
+                1
+            }
+            0x3E => {
+                self.regs.a = self.fetch_byte();
+                2
+            }
+            0x3F => {
+                self.ccf();
+                1
+            }
+            0x40 => 1,
+            0x41 => {
+                self.regs.b = self.regs.c;
+                1
+            }
+            0x42 => {
+                self.regs.b = self.regs.d;
+                1
+            }
+            0x43 => {
+                self.regs.b = self.regs.e;
+                1
+            }
+            0x44 => {
+                self.regs.b = self.regs.h;
+                1
+            }
+            0x45 => {
+                self.regs.b = self.regs.l;
+                1
+            }
+            0x46 => {
+                self.regs.b = self.mem.read8(self.regs.get_hl());
+                2
+            }
+            0x47 => {
+                self.regs.b = self.regs.a;
+                1
+            }
+            0x48 => {
+                self.regs.c = self.regs.b;
+                1
+            }
+            0x49 => 1,
+            0x4A => {
+                self.regs.c = self.regs.d;
+                1
+            }
+            0x4B => {
+                self.regs.c = self.regs.e;
+                1
+            }
+            0x4C => {
+                self.regs.c = self.regs.h;
+                1
+            }
+            0x4D => {
+                self.regs.c = self.regs.l;
+                1
+            }
+            0x4E => {
+                self.regs.c = self.mem.read8(self.regs.get_hl());
+                2
+            }
+            0x4F => {
+                self.regs.c = self.regs.a;
+                1
+            }
+            0x50 => {
+                self.regs.d = self.regs.b;
+                1
+            }
+            0x51 => {
+                self.regs.d = self.regs.c;
+                1
+            }
+            0x52 => 1,
+            0x53 => {
+                self.regs.d = self.regs.e;
+                1
+            }
+            0x54 => {
+                self.regs.d = self.regs.h;
+                1
+            }
+            0x55 => {
+                self.regs.d = self.regs.l;
+                1
+            }
+            0x56 => {
+                self.regs.d = self.mem.read8(self.regs.get_hl());
+                2
+            }
+            0x57 => {
+                self.regs.d = self.regs.a;
+                1
+            }
+            0x58 => {
+                self.regs.e = self.regs.b;
+                1
+            }
+            0x59 => {
+                self.regs.e = self.regs.c;
+                1
+            }
+            0x5A => {
+                self.regs.e = self.regs.d;
+                1
+            }
+            0x5B => 1,
+            0x5C => {
+                self.regs.e = self.regs.h;
+                1
+            }
+            0x5D => {
+                self.regs.e = self.regs.l;
+                1
+            }
+            0x5E => {
+                self.regs.e = self.mem.read8(self.regs.get_hl());
+                2
+            }
+            0x5F => {
+                self.regs.e = self.regs.a;
+                1
+            }
+            0x60 => {
+                self.regs.h = self.regs.b;
+                1
+            }
+            0x61 => {
+                self.regs.h = self.regs.c;
+                1
+            }
+            0x62 => {
+                self.regs.h = self.regs.d;
+                1
+            }
+            0x63 => {
+                self.regs.h = self.regs.e;
+                1
+            }
+            0x64 => 1,
+            0x65 => {
+                self.regs.h = self.regs.l;
+                1
+            }
+            0x66 => {
+                self.regs.h = self.mem.read8(self.regs.get_hl());
+                2
+            }
+            0x67 => {
+                self.regs.h = self.regs.a;
+                1
+            }
+            0x68 => {
+                self.regs.l = self.regs.b;
+                1
+            }
+            0x69 => {
+                self.regs.l = self.regs.c;
+                1
+            }
+            0x6A => {
+                self.regs.l = self.regs.d;
+                1
+            }
+            0x6B => {
+                self.regs.l = self.regs.e;
+                1
+            }
+            0x6C => {
+                self.regs.l = self.regs.h;
+                1
+            }
+            0x6D => 1,
+            0x6E => {
+                self.regs.l = self.mem.read8(self.regs.get_hl());
+                2
+            }
+            0x6F => {
+                self.regs.l = self.regs.a;
+                1
+            }
+            0x70 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.b);
+                2
+            }
+            0x71 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.c);
+                2
+            }
+            0x72 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.d);
+                2
+            }
+            0x73 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.e);
+                2
+            }
+            0x74 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.h);
+                2
+            }
+            0x75 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.l);
+                2
+            }
+            0x76 => {
+                self.enabled = false;
+                1
+            }
+            0x77 => {
+                self.mem.write8(self.regs.get_hl(), self.regs.a);
+                2
+            }
+            0x78 => {
+                self.regs.a = self.regs.b;
+                1
+            }
+            0x79 => {
+                self.regs.a = self.regs.c;
+                1
+            }
+            0x7A => {
+                self.regs.a = self.regs.d;
+                1
+            }
+            0x7B => {
+                self.regs.a = self.regs.e;
+                1
+            }
+            0x7C => {
+                self.regs.a = self.regs.h;
+                1
+            }
+            0x7D => {
+                self.regs.a = self.regs.l;
+                1
+            }
+            0x7E => {
+                self.regs.a = self.mem.read8(self.regs.get_hl());
+                2
+            }
+            0x7F => 1,
+            0x80 => {
+                self.add_imm(self.regs.b);
+                1
+            }
+            0x81 => {
+                self.add_imm(self.regs.c);
+                1
+            }
+            0x82 => {
+                self.add_imm(self.regs.d);
+                1
+            }
+            0x83 => {
+                self.add_imm(self.regs.e);
+                1
+            }
+            0x84 => {
+                self.add_imm(self.regs.h);
+                1
+            }
+            0x85 => {
+                self.add_imm(self.regs.l);
+                1
+            }
+            0x86 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.add_imm(val);
+                2
+            }
+            0x87 => {
+                self.add_imm(self.regs.a);
+                1
+            }
+            0x88 => {
+                self.adc_imm(self.regs.b);
+                1
+            }
+            0x89 => {
+                self.adc_imm(self.regs.c);
+                1
+            }
+            0x8A => {
+                self.adc_imm(self.regs.d);
+                1
+            }
+            0x8B => {
+                self.adc_imm(self.regs.e);
+                1
+            }
+            0x8C => {
+                self.adc_imm(self.regs.h);
+                1
+            }
+            0x8D => {
+                self.adc_imm(self.regs.l);
+                1
+            }
+            0x8E => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.adc_imm(val);
+                2
+            }
+            0x8F => {
+                self.adc_imm(self.regs.a);
+                1
+            }
+            0x90 => {
+                self.sub_imm(self.regs.b);
+                1
+            }
+            0x91 => {
+                self.sub_imm(self.regs.c);
+                1
+            }
+            0x92 => {
+                self.sub_imm(self.regs.d);
+                1
+            }
+            0x93 => {
+                self.sub_imm(self.regs.e);
+                1
+            }
+            0x94 => {
+                self.sub_imm(self.regs.h);
+                1
+            }
+            0x95 => {
+                self.sub_imm(self.regs.l);
+                1
+            }
+            0x96 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.sub_imm(val);
+                2
+            }
+            0x97 => {
+                self.sub_imm(self.regs.a);
+                1
+            }
+            0x98 => {
+                self.sbc_imm(self.regs.b);
+                1
+            }
+            0x99 => {
+                self.sbc_imm(self.regs.c);
+                1
+            }
+            0x9A => {
+                self.sbc_imm(self.regs.d);
+                1
+            }
+            0x9B => {
+                self.sbc_imm(self.regs.e);
+                1
+            }
+            0x9C => {
+                self.sbc_imm(self.regs.h);
+                1
+            }
+            0x9D => {
+                self.sbc_imm(self.regs.l);
+                1
+            }
+            0x9E => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.sbc_imm(val);
+                2
+            }
+            0x9F => {
+                self.sbc_imm(self.regs.a);
+                1
+            }
+            0xA0 => {
+                self.and_imm(self.regs.b);
+                1
+            }
+            0xA1 => {
+                self.and_imm(self.regs.c);
+                1
+            }
+            0xA2 => {
+                self.and_imm(self.regs.d);
+                1
+            }
+            0xA3 => {
+                self.and_imm(self.regs.e);
+                1
+            }
+            0xA4 => {
+                self.and_imm(self.regs.h);
+                1
+            }
+            0xA5 => {
+                self.and_imm(self.regs.l);
+                1
+            }
+            0xA6 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.and_imm(val);
+                2
+            }
+            0xA7 => {
+                self.and_imm(self.regs.a);
+                1
+            }
+            0xA8 => {
+                self.xor_imm(self.regs.b);
+                1
+            }
+            0xA9 => {
+                self.xor_imm(self.regs.c);
+                1
+            }
+            0xAA => {
+                self.xor_imm(self.regs.d);
+                1
+            }
+            0xAB => {
+                self.xor_imm(self.regs.e);
+                1
+            }
+            0xAC => {
+                self.xor_imm(self.regs.h);
+                1
+            }
+            0xAD => {
+                self.xor_imm(self.regs.l);
+                1
+            }
+            0xAE => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.xor_imm(val);
+                2
+            }
+            0xAF => {
+                self.xor_imm(self.regs.a);
+                1
+            }
+            0xB0 => {
+                self.or_imm(self.regs.b);
+                1
+            }
+            0xB1 => {
+                self.or_imm(self.regs.c);
+                1
+            }
+            0xB2 => {
+                self.or_imm(self.regs.d);
+                1
+            }
+            0xB3 => {
+                self.or_imm(self.regs.e);
+                1
+            }
+            0xB4 => {
+                self.or_imm(self.regs.h);
+                1
+            }
+            0xB5 => {
+                self.or_imm(self.regs.l);
+                1
+            }
+            0xB6 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.or_imm(val);
+                2
+            }
+            0xB7 => {
+                self.or_imm(self.regs.a);
+                1
+            }
+            0xB8 => {
+                self.cp_imm(self.regs.b);
+                1
+            }
+            0xB9 => {
+                self.cp_imm(self.regs.c);
+                1
+            }
+            0xBA => {
+                self.cp_imm(self.regs.d);
+                1
+            }
+            0xBB => {
+                self.cp_imm(self.regs.e);
+                1
+            }
+            0xBC => {
+                self.cp_imm(self.regs.h);
+                1
+            }
+            0xBD => {
+                self.cp_imm(self.regs.l);
+                1
+            }
+            0xBE => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.cp_imm(val);
+                2
+            }
+            0xBF => {
+                self.cp_imm(self.regs.a);
+                1
+            }
+            0xC0 => {
+                if !self.regs.isset_flag(FLAG_ZERO) {
+                    self.ret();
+                    5
+                } else {
+                    2
+                }
+            }
+            0xC1 => {
+                let val = self.pop();
+                self.regs.set_bc(val);
+                3
+            }
+            0xC2 => {
+                let addr = self.fetch_word();
+                if !self.regs.isset_flag(FLAG_ZERO) {
+                    self.regs.pc = addr;
+                    4
+                } else {
+                    3
+                }
+            }
+            0xC3 => {
+                let addr = self.fetch_word();
+                self.regs.pc = addr;
+                4
+            }
+            0xC4 => {
+                let addr = self.fetch_word();
+                if !self.regs.isset_flag(FLAG_ZERO) {
+                    self.call(addr);
+                    6
+                } else {
+                    3
+                }
+            }
+            0xC5 => {
+                self.push(self.regs.get_bc());
+                4
+            }
+            0xC6 => {
+                let val = self.fetch_byte();
+                self.add_imm(val);
+                2
+            }
+            0xC7 => {
+                self.rst(0x00);
+                2
+            }
+            0xC8 => {
+                if self.regs.isset_flag(FLAG_ZERO) {
+                    self.ret();
+                    5
+                } else {
+                    2
+                }
+            }
+            0xC9 => {
+                self.ret();
+                2
+            }
+            0xCA => {
+                let addr = self.fetch_word();
+                if self.regs.isset_flag(FLAG_ZERO) {
+                    self.regs.pc = addr;
+                    4
+                } else {
+                    3
+                }
+            }
+            0xCB => self.cb_execute(),
+            0xCC => {
+                let addr = self.fetch_word();
+                if self.regs.isset_flag(FLAG_ZERO) {
+                    self.call(addr);
+                    6
+                } else {
+                    3
+                }
+            }
+            0xCD => {
+                let value = self.fetch_word();
+                self.call(value);
+                6
+            }
+            0xCE => {
+                let value = self.fetch_byte();
+                self.adc_imm(value);
+                2
+            }
+            0xCF => {
+                self.rst(0x08);
+                2
+            }
+            0xD0 => {
+                if !self.regs.isset_flag(FLAG_CARRY) {
+                    self.ret();
+                    5
+                } else {
+                    2
+                }
+            }
+            0xD1 => {
+                let val = self.pop();
+                self.regs.set_de(val);
+                3
+            }
+            0xD2 => {
+                let addr = self.fetch_word();
+                if !self.regs.isset_flag(FLAG_CARRY) {
+                    self.regs.pc = addr;
+                    4
+                } else {
+                    3
+                }
+            }
+            0xD4 => {
+                let addr = self.fetch_word();
+                if !self.regs.isset_flag(FLAG_CARRY) {
+                    self.call(addr);
+                    6
+                } else {
+                    3
+                }
+            }
+            0xD5 => {
+                self.push(self.regs.get_de());
+                4
+            }
+            0xD6 => {
+                let val = self.fetch_byte();
+                self.sub_imm(val);
+                2
+            }
+            0xD7 => {
+                self.rst(0x10);
+                2
+            }
+            0xD8 => {
+                if self.regs.isset_flag(FLAG_CARRY) {
+                    self.ret();
+                    5
+                } else {
+                    2
+                }
+            }
+            0xD9 => {
+                self.ret();
+                self.interrupts = true;
+                4
+            }
+            0xDA => {
+                let addr = self.fetch_word();
+                if self.regs.isset_flag(FLAG_CARRY) {
+                    self.regs.pc = addr;
+                    4
+                } else {
+                    3
+                }
+            }
+            0xDC => {
+                let addr = self.fetch_word();
+                if self.regs.isset_flag(FLAG_CARRY) {
+                    self.call(addr);
+                    6
+                } else {
+                    3
+                }
+            }
+            0xDE => {
+                let value = self.fetch_byte();
+                self.sbc_imm(value);
+                2
+            }
+            0xDF => {
+                self.rst(0x18);
+                2
+            }
+            0xE0 => {
+                let addr = 0xFF00 | self.fetch_byte() as u16;
+                self.mem.write8(addr, self.regs.a);
+                3
+            }
+            0xE1 => {
+                let val = self.pop();
+                self.regs.set_hl(val);
+                3
+            }
+            0xE2 => {
+                self.mem.write8(self.regs.c as u16, self.regs.a);
+                2
+            }
+            0xE5 => {
+                self.push(self.regs.get_hl());
+                4
+            }
+            0xE6 => {
+                let val = self.fetch_byte();
+                self.and_imm(val);
+                2
+            }
+            0xE7 => {
+                self.rst(0x20);
+                2
+            }
+            0xE8 => {
+                let val = self.fetch_byte();
+                self.regs.sp = self.regs.sp.wrapping_add(val as u16);
+                2
+            }
+            0xE9 => {
+                self.regs.pc = self.regs.get_hl();
+                1
+            }
+            0xEA => {
+                let addr = self.fetch_word();
+                self.mem.write8(addr, self.regs.a);
+                4
+            }
+            0xEE => {
+                let value = self.fetch_byte();
+                self.xor_imm(value);
+                2
+            }
+            0xEF => {
+                self.rst(0x28);
+                2
+            }
+            0xF0 => {
+                let addr = self.fetch_byte() as u16 | 0xFF00;
+                self.regs.a = self.mem.read8(addr);
+                3
+            }
+            0xF1 => {
+                let val = self.pop();
+                self.regs.set_af(val);
+                3
+            }
+            0xF2 => {
+                self.regs.a = self.mem.read8(self.regs.c as u16);
+                2
+            }
+            0xF3 => {
+                self.interrupts = false;
+                1
+            }
+            0xF5 => {
+                self.push(self.regs.get_af());
+                4
+            }
+            0xF6 => {
+                let val = self.fetch_byte();
+                self.or_imm(val);
+                2
+            }
+            0xF7 => {
+                self.rst(0x30);
+                2
+            }
+            0xF8 => {
+                let val = self.fetch_byte() as i8 as i16;
+                let result = val.wrapping_add(self.regs.sp as i16) as u16;
+                self.regs.set_hl(result);
+                3
+            }
+            0xF9 => {
+                self.load_sp_hl();
+                2
+            }
+            0xFA => {
+                let addr = self.fetch_word();
+                self.regs.a = self.mem.read8(addr);
+                4
+            }
+            0xFB => {
+                self.interrupts = true;
+                1
+            }
+            0xFE => {
+                let val = self.fetch_byte();
+                self.cp_imm(val);
+                2
+            }
+            0xFF => {
+                self.rst(0x38);
+                2
+            }
+            x => {
+                panic!("Instruction {:2X} is not implemented", x)
+            }
+        }
+    }
+
+    fn cb_execute(&mut self) -> u32 {
+        0
     }
 }
 
@@ -805,7 +1937,7 @@ fn test_cp_imm() {
 fn test_inc() {
     let mut cpu: Cpu = Default::default();
     cpu.regs.a = 0xF;
-    cpu.regs.a = cpu.inc8(cpu.regs.a);
+    cpu.regs.a = cpu.inc(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x10);
     assert!(!cpu.regs.isset_flag(FLAG_SUB));
     assert!(!cpu.regs.isset_flag(FLAG_ZERO));
@@ -813,7 +1945,7 @@ fn test_inc() {
     assert!(!cpu.regs.isset_flag(FLAG_ZERO));
 
     cpu.regs.a = 0xFF;
-    cpu.regs.a = cpu.inc8(cpu.regs.a);
+    cpu.regs.a = cpu.inc(cpu.regs.a);
     assert_eq!(cpu.regs.a, 0x00);
     assert!(!cpu.regs.isset_flag(FLAG_SUB));
     assert!(cpu.regs.isset_flag(FLAG_ZERO));
@@ -1144,4 +2276,15 @@ fn test_ccf() {
 
     cpu.ccf();
     assert!(cpu.regs.isset_flag(FLAG_CARRY));
+}
+
+#[test]
+fn test_fetch_byte() {
+    let mut cpu: Cpu = Default::default();
+    cpu.mem.write8(0xC000, 0x42);
+    cpu.regs.pc = 0xC000;
+
+    let value = cpu.fetch_byte();
+    assert_eq!(cpu.regs.pc, 0xC001);
+    assert_eq!(value, 0x42);
 }
