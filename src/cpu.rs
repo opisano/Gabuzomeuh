@@ -492,6 +492,12 @@ impl Cpu {
         val | bit_mask
     }
 
+    fn res(&self, b: u8, val: u8) -> u8 {
+        let bit_index: u8 = b & 0b111;
+        let bit_mask = 1 << bit_index;
+        val & !bit_mask
+    }
+
     /// Rotate the content of A to the left
     ///
     /// The contents of bit 7 are placed in both Carry and bit 0 of A
@@ -1785,7 +1791,1089 @@ impl Cpu {
     }
 
     fn cb_execute(&mut self) -> u32 {
-        0
+        let opcode = self.fetch_byte();
+        match opcode {
+            0x00 => {
+                self.regs.b = self.rlc(self.regs.b);
+                2
+            }
+            0x01 => {
+                self.regs.c = self.rlc(self.regs.c);
+                2
+            }
+            0x02 => {
+                self.regs.d = self.rlc(self.regs.d);
+                2
+            }
+            0x03 => {
+                self.regs.e = self.rlc(self.regs.e);
+                2
+            }
+            0x04 => {
+                self.regs.h = self.rlc(self.regs.h);
+                2
+            }
+            0x05 => {
+                self.regs.l = self.rlc(self.regs.l);
+                2
+            }
+            0x06 => {
+                let orig = self.mem.read8(self.regs.get_hl());
+                let rotated = self.rlc(orig);
+                self.mem.write8(self.regs.get_hl(), rotated);
+                4
+            }
+            0x07 => {
+                self.regs.a = self.rlc(self.regs.a);
+                2
+            }
+            0x08 => {
+                self.regs.b = self.rrc(self.regs.b);
+                2
+            }
+            0x09 => {
+                self.regs.c = self.rrc(self.regs.c);
+                2
+            }
+            0x0A => {
+                self.regs.d = self.rrc(self.regs.d);
+                2
+            }
+            0x0B => {
+                self.regs.e = self.rrc(self.regs.e);
+                2
+            }
+            0x0C => {
+                self.regs.e = self.rrc(self.regs.h);
+                2
+            }
+            0x0D => {
+                self.regs.e = self.rrc(self.regs.l);
+                2
+            }
+            0x0E => {
+                let orig = self.mem.read8(self.regs.get_hl());
+                let rotated = self.rrc(orig);
+                self.mem.write8(self.regs.get_hl(), rotated);
+                4
+            }
+            0x0F => {
+                self.regs.a = self.rrc(self.regs.a);
+                2
+            }
+            0x10 => {
+                self.regs.b = self.rl(self.regs.b);
+                2
+            }
+            0x11 => {
+                self.regs.c = self.rl(self.regs.c);
+                2
+            }
+            0x12 => {
+                self.regs.d = self.rl(self.regs.d);
+                2
+            }
+            0x13 => {
+                self.regs.e = self.rl(self.regs.e);
+                2
+            }
+            0x14 => {
+                self.regs.h = self.rl(self.regs.h);
+                2
+            }
+            0x15 => {
+                self.regs.l = self.rl(self.regs.l);
+                2
+            }
+            0x16 => {
+                let orig = self.mem.read8(self.regs.get_hl());
+                let rotated = self.rl(orig);
+                self.mem.write8(self.regs.get_hl(), rotated);
+                4
+            }
+            0x17 => {
+                self.regs.a = self.rl(self.regs.a);
+                2
+            }
+            0x18 => {
+                self.regs.b = self.rr(self.regs.b);
+                2
+            }
+            0x19 => {
+                self.regs.c = self.rr(self.regs.c);
+                2
+            }
+            0x1A => {
+                self.regs.d = self.rr(self.regs.d);
+                2
+            }
+            0x1B => {
+                self.regs.e = self.rr(self.regs.e);
+                2
+            }
+            0x1C => {
+                self.regs.h = self.rr(self.regs.h);
+                2
+            }
+            0x1D => {
+                self.regs.l = self.rr(self.regs.l);
+                2
+            }
+            0x1E => {
+                let orig = self.mem.read8(self.regs.get_hl());
+                let rotated = self.rr(orig);
+                self.mem.write8(self.regs.get_hl(), rotated);
+                4
+            }
+            0x1F => {
+                self.regs.a = self.rr(self.regs.a);
+                2
+            }
+            0x20 => {
+                self.regs.b = self.sla(self.regs.b);
+                2
+            }
+            0x21 => {
+                self.regs.c = self.sla(self.regs.c);
+                2
+            }
+            0x22 => {
+                self.regs.d = self.sla(self.regs.d);
+                2
+            }
+            0x23 => {
+                self.regs.e = self.sla(self.regs.e);
+                2
+            }
+            0x24 => {
+                self.regs.h = self.sla(self.regs.h);
+                2
+            }
+            0x25 => {
+                self.regs.l = self.sla(self.regs.l);
+                2
+            }
+            0x26 => {
+                let orig = self.mem.read8(self.regs.get_hl());
+                let shifted = self.sla(orig);
+                self.mem.write8(self.regs.get_hl(), shifted);
+                4
+            }
+            0x27 => {
+                self.regs.a = self.sla(self.regs.a);
+                2
+            }
+            0x28 => {
+                self.regs.b = self.sra(self.regs.b);
+                2
+            }
+            0x29 => {
+                self.regs.c = self.sra(self.regs.c);
+                2
+            }
+            0x2A => {
+                self.regs.d = self.sra(self.regs.d);
+                2
+            }
+            0x2B => {
+                self.regs.e = self.sra(self.regs.e);
+                2
+            }
+            0x2C => {
+                self.regs.h = self.sra(self.regs.h);
+                2
+            }
+            0x2D => {
+                self.regs.l = self.sra(self.regs.l);
+                2
+            }
+            0x2E => {
+                let orig = self.mem.read8(self.regs.get_hl());
+                let shifted = self.sra(orig);
+                self.mem.write8(self.regs.get_hl(), shifted);
+                4
+            }
+            0x2F => {
+                self.regs.a = self.sra(self.regs.a);
+                2
+            }
+            0x30 => {
+                self.regs.b = self.swap(self.regs.b);
+                2
+            }
+            0x31 => {
+                self.regs.c = self.swap(self.regs.c);
+                2
+            }
+            0x32 => {
+                self.regs.d = self.swap(self.regs.d);
+                2
+            }
+            0x33 => {
+                self.regs.e = self.swap(self.regs.e);
+                2
+            }
+            0x34 => {
+                self.regs.h = self.swap(self.regs.h);
+                2
+            }
+            0x35 => {
+                self.regs.l = self.swap(self.regs.l);
+                2
+            }
+            0x36 => {
+                let orig = self.mem.read8(self.regs.get_hl());
+                let swapped = self.swap(orig);
+                self.mem.write8(self.regs.get_hl(), swapped);
+                4
+            }
+            0x37 => {
+                self.regs.a = self.swap(self.regs.a);
+                2
+            }
+            0x38 => {
+                self.regs.b = self.srl(self.regs.b);
+                2
+            }
+            0x39 => {
+                self.regs.c = self.srl(self.regs.c);
+                2
+            }
+            0x3A => {
+                self.regs.d = self.srl(self.regs.d);
+                2
+            }
+            0x3B => {
+                self.regs.e = self.srl(self.regs.e);
+                2
+            }
+            0x3C => {
+                self.regs.h = self.srl(self.regs.h);
+                2
+            }
+            0x3D => {
+                self.regs.l = self.srl(self.regs.l);
+                2
+            }
+            0x3E => {
+                let orig = self.mem.read8(self.regs.get_hl());
+                let shifted = self.srl(orig);
+                self.mem.write8(self.regs.get_hl(), shifted);
+                4
+            }
+            0x3F => {
+                self.regs.a = self.srl(self.regs.a);
+                2
+            }
+            0x40 => {
+                self.bit(0, self.regs.b);
+                2
+            }
+            0x41 => {
+                self.bit(0, self.regs.c);
+                2
+            }
+            0x42 => {
+                self.bit(0, self.regs.d);
+                2
+            }
+            0x43 => {
+                self.bit(0, self.regs.e);
+                2
+            }
+            0x44 => {
+                self.bit(0, self.regs.h);
+                2
+            }
+            0x45 => {
+                self.bit(0, self.regs.l);
+                2
+            }
+            0x46 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.bit(0, val);
+                4
+            }
+            0x47 => {
+                self.bit(0, self.regs.a);
+                2
+            }
+            0x48 => {
+                self.bit(1, self.regs.b);
+                2
+            }
+            0x49 => {
+                self.bit(1, self.regs.c);
+                2
+            }
+            0x4A => {
+                self.bit(1, self.regs.d);
+                2
+            }
+            0x4B => {
+                self.bit(1, self.regs.e);
+                2
+            }
+            0x4C => {
+                self.bit(1, self.regs.h);
+                2
+            }
+            0x4D => {
+                self.bit(1, self.regs.l);
+                2
+            }
+            0x4E => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.bit(1, val);
+                4
+            }
+            0x4F => {
+                self.bit(1, self.regs.a);
+                2
+            }
+            0x50 => {
+                self.bit(2, self.regs.b);
+                2
+            }
+            0x51 => {
+                self.bit(2, self.regs.c);
+                2
+            }
+            0x52 => {
+                self.bit(2, self.regs.d);
+                2
+            }
+            0x53 => {
+                self.bit(2, self.regs.e);
+                2
+            }
+            0x54 => {
+                self.bit(2, self.regs.h);
+                2
+            }
+            0x55 => {
+                self.bit(2, self.regs.l);
+                2
+            }
+            0x56 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.bit(2, val);
+                4
+            }
+            0x57 => {
+                self.bit(2, self.regs.a);
+                2
+            }
+            0x58 => {
+                self.bit(3, self.regs.b);
+                2
+            }
+            0x59 => {
+                self.bit(3, self.regs.c);
+                2
+            }
+            0x5A => {
+                self.bit(3, self.regs.d);
+                2
+            }
+            0x5B => {
+                self.bit(3, self.regs.e);
+                2
+            }
+            0x5C => {
+                self.bit(3, self.regs.h);
+                2
+            }
+            0x5D => {
+                self.bit(3, self.regs.l);
+                2
+            }
+            0x5E => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.bit(3, val);
+                4
+            }
+            0x5F => {
+                self.bit(3, self.regs.a);
+                2
+            }
+            0x60 => {
+                self.bit(4, self.regs.b);
+                2
+            }
+            0x61 => {
+                self.bit(4, self.regs.c);
+                2
+            }
+            0x62 => {
+                self.bit(4, self.regs.d);
+                2
+            }
+            0x63 => {
+                self.bit(4, self.regs.e);
+                2
+            }
+            0x64 => {
+                self.bit(4, self.regs.h);
+                2
+            }
+            0x65 => {
+                self.bit(4, self.regs.l);
+                2
+            }
+            0x66 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.bit(4, val);
+                4
+            }
+            0x67 => {
+                self.bit(4, self.regs.a);
+                2
+            }
+            0x68 => {
+                self.bit(5, self.regs.b);
+                2
+            }
+            0x69 => {
+                self.bit(5, self.regs.c);
+                2
+            }
+            0x6A => {
+                self.bit(5, self.regs.d);
+                2
+            }
+            0x6B => {
+                self.bit(5, self.regs.e);
+                2
+            }
+            0x6C => {
+                self.bit(5, self.regs.h);
+                2
+            }
+            0x6D => {
+                self.bit(5, self.regs.l);
+                2
+            }
+            0x6E => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.bit(5, val);
+                4
+            }
+            0x6F => {
+                self.bit(5, self.regs.a);
+                2
+            }
+            0x70 => {
+                self.bit(6, self.regs.b);
+                2
+            }
+            0x71 => {
+                self.bit(6, self.regs.c);
+                2
+            }
+            0x72 => {
+                self.bit(6, self.regs.d);
+                2
+            }
+            0x73 => {
+                self.bit(6, self.regs.e);
+                2
+            }
+            0x74 => {
+                self.bit(6, self.regs.h);
+                2
+            }
+            0x75 => {
+                self.bit(6, self.regs.l);
+                2
+            }
+            0x76 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.bit(6, val);
+                4
+            }
+            0x77 => {
+                self.bit(6, self.regs.a);
+                2
+            }
+            0x78 => {
+                self.bit(7, self.regs.b);
+                2
+            }
+            0x79 => {
+                self.bit(7, self.regs.c);
+                2
+            }
+            0x7A => {
+                self.bit(7, self.regs.d);
+                2
+            }
+            0x7B => {
+                self.bit(7, self.regs.e);
+                2
+            }
+            0x7C => {
+                self.bit(7, self.regs.h);
+                2
+            }
+            0x7D => {
+                self.bit(7, self.regs.l);
+                2
+            }
+            0x7E => {
+                let val = self.mem.read8(self.regs.get_hl());
+                self.bit(7, val);
+                6
+            }
+            0x7F => {
+                self.bit(7, self.regs.a);
+                2
+            }
+            0x80 => {
+                self.regs.b = self.res(0, self.regs.b);
+                2
+            }
+            0x81 => {
+                self.regs.c = self.res(0, self.regs.c);
+                2
+            }
+            0x82 => {
+                self.regs.d = self.res(0, self.regs.d);
+                2
+            }
+            0x83 => {
+                self.regs.e = self.res(0, self.regs.e);
+                2
+            }
+            0x84 => {
+                self.regs.h = self.res(0, self.regs.h);
+                2
+            }
+            0x85 => {
+                self.regs.l = self.res(0, self.regs.l);
+                2
+            }
+            0x86 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.res(0, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0x87 => {
+                self.regs.a = self.res(0, self.regs.a);
+                2
+            }
+            0x88 => {
+                self.regs.b = self.res(1, self.regs.b);
+                2
+            }
+            0x89 => {
+                self.regs.c = self.res(1, self.regs.c);
+                2
+            }
+            0x8A => {
+                self.regs.d = self.res(1, self.regs.d);
+                2
+            }
+            0x8B => {
+                self.regs.e = self.res(1, self.regs.e);
+                2
+            }
+            0x8C => {
+                self.regs.h = self.res(1, self.regs.h);
+                2
+            }
+            0x8D => {
+                self.regs.l = self.res(1, self.regs.l);
+                2
+            }
+            0x8E => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.res(1, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0x8F => {
+                self.regs.a = self.res(1, self.regs.a);
+                2
+            }
+            0x90 => {
+                self.regs.b = self.res(2, self.regs.b);
+                2
+            }
+            0x91 => {
+                self.regs.c = self.res(2, self.regs.c);
+                2
+            }
+            0x92 => {
+                self.regs.d = self.res(2, self.regs.d);
+                2
+            }
+            0x93 => {
+                self.regs.e = self.res(2, self.regs.e);
+                2
+            }
+            0x94 => {
+                self.regs.h = self.res(2, self.regs.h);
+                2
+            }
+            0x95 => {
+                self.regs.l = self.res(2, self.regs.l);
+                2
+            }
+            0x96 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.res(2, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0x97 => {
+                self.regs.a = self.res(2, self.regs.a);
+                2
+            }
+            0x98 => {
+                self.regs.b = self.res(3, self.regs.b);
+                2
+            }
+            0x99 => {
+                self.regs.c = self.res(3, self.regs.c);
+                2
+            }
+            0x9A => {
+                self.regs.d = self.res(3, self.regs.d);
+                2
+            }
+            0x9B => {
+                self.regs.e = self.res(3, self.regs.e);
+                2
+            }
+            0x9C => {
+                self.regs.h = self.res(3, self.regs.h);
+                2
+            }
+            0x9D => {
+                self.regs.l = self.res(3, self.regs.l);
+                2
+            }
+            0x9E => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.res(3, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0x9F => {
+                self.regs.a = self.res(3, self.regs.a);
+                2
+            }
+            0xA0 => {
+                self.regs.b = self.res(4, self.regs.b);
+                2
+            }
+            0xA1 => {
+                self.regs.c = self.res(4, self.regs.c);
+                2
+            }
+            0xA2 => {
+                self.regs.d = self.res(4, self.regs.d);
+                2
+            }
+            0xA3 => {
+                self.regs.e = self.res(4, self.regs.e);
+                2
+            }
+            0xA4 => {
+                self.regs.h = self.res(4, self.regs.h);
+                2
+            }
+            0xA5 => {
+                self.regs.l = self.res(4, self.regs.l);
+                2
+            }
+            0xA6 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.res(4, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xA7 => {
+                self.regs.a = self.res(4, self.regs.a);
+                2
+            }
+            0xA8 => {
+                self.regs.b = self.res(5, self.regs.b);
+                2
+            }
+            0xA9 => {
+                self.regs.c = self.res(5, self.regs.c);
+                2
+            }
+            0xAA => {
+                self.regs.d = self.res(5, self.regs.d);
+                2
+            }
+            0xAB => {
+                self.regs.e = self.res(5, self.regs.e);
+                2
+            }
+            0xAC => {
+                self.regs.h = self.res(5, self.regs.h);
+                2
+            }
+            0xAD => {
+                self.regs.l = self.res(5, self.regs.l);
+                2
+            }
+            0xAE => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.res(5, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xAF => {
+                self.regs.a = self.res(5, self.regs.a);
+                2
+            }
+            0xB0 => {
+                self.regs.b = self.res(6, self.regs.b);
+                2
+            }
+            0xB1 => {
+                self.regs.c = self.res(6, self.regs.c);
+                2
+            }
+            0xB2 => {
+                self.regs.d = self.res(6, self.regs.d);
+                2
+            }
+            0xB3 => {
+                self.regs.e = self.res(6, self.regs.e);
+                2
+            }
+            0xB4 => {
+                self.regs.h = self.res(6, self.regs.h);
+                2
+            }
+            0xB5 => {
+                self.regs.l = self.res(6, self.regs.l);
+                2
+            }
+            0xB6 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.res(6, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xB7 => {
+                self.regs.a = self.res(6, self.regs.a);
+                2
+            }
+            0xB8 => {
+                self.regs.b = self.res(7, self.regs.b);
+                2
+            }
+            0xB9 => {
+                self.regs.c = self.res(7, self.regs.c);
+                2
+            }
+            0xBA => {
+                self.regs.d = self.res(7, self.regs.d);
+                2
+            }
+            0xBB => {
+                self.regs.e = self.res(7, self.regs.e);
+                2
+            }
+            0xBC => {
+                self.regs.h = self.res(7, self.regs.h);
+                2
+            }
+            0xBD => {
+                self.regs.l = self.res(7, self.regs.l);
+                2
+            }
+            0xBE => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.res(7, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xBF => {
+                self.regs.a = self.res(7, self.regs.a);
+                2
+            }
+            0xC0 => {
+                self.regs.b = self.set(0, self.regs.b);
+                2
+            }
+            0xC1 => {
+                self.regs.c = self.set(0, self.regs.c);
+                2
+            }
+            0xC2 => {
+                self.regs.d = self.set(0, self.regs.d);
+                2
+            }
+            0xC3 => {
+                self.regs.e = self.set(0, self.regs.e);
+                2
+            }
+            0xC4 => {
+                self.regs.h = self.set(0, self.regs.h);
+                2
+            }
+            0xC5 => {
+                self.regs.l = self.set(0, self.regs.l);
+                2
+            }
+            0xC6 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.set(0, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xC7 => {
+                self.regs.a = self.set(0, self.regs.a);
+                2
+            }
+            0xC8 => {
+                self.regs.b = self.set(1, self.regs.b);
+                2
+            }
+            0xC9 => {
+                self.regs.c = self.set(1, self.regs.c);
+                2
+            }
+            0xCA => {
+                self.regs.d = self.set(1, self.regs.d);
+                2
+            }
+            0xCB => {
+                self.regs.e = self.set(1, self.regs.e);
+                2
+            }
+            0xCC => {
+                self.regs.h = self.set(1, self.regs.h);
+                2
+            }
+            0xCD => {
+                self.regs.l = self.set(1, self.regs.l);
+                2
+            }
+            0xCE => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.set(1, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xCF => {
+                self.regs.a = self.set(1, self.regs.a);
+                2
+            }
+            0xD0 => {
+                self.regs.b = self.set(2, self.regs.b);
+                2
+            }
+            0xD1 => {
+                self.regs.c = self.set(2, self.regs.c);
+                2
+            }
+            0xD2 => {
+                self.regs.d = self.set(2, self.regs.d);
+                2
+            }
+            0xD3 => {
+                self.regs.e = self.set(2, self.regs.e);
+                2
+            }
+            0xD4 => {
+                self.regs.h = self.set(2, self.regs.h);
+                2
+            }
+            0xD5 => {
+                self.regs.l = self.set(2, self.regs.l);
+                2
+            }
+            0xD6 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.set(2, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xD7 => {
+                self.regs.a = self.set(2, self.regs.a);
+                2
+            }
+            0xD8 => {
+                self.regs.b = self.set(3, self.regs.b);
+                2
+            }
+            0xD9 => {
+                self.regs.c = self.set(3, self.regs.c);
+                2
+            }
+            0xDA => {
+                self.regs.d = self.set(3, self.regs.d);
+                2
+            }
+            0xDB => {
+                self.regs.e = self.set(3, self.regs.e);
+                2
+            }
+            0xDC => {
+                self.regs.h = self.set(3, self.regs.h);
+                2
+            }
+            0xDD => {
+                self.regs.l = self.set(3, self.regs.l);
+                2
+            }
+            0xDE => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.set(3, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xDF => {
+                self.regs.a = self.set(3, self.regs.a);
+                2
+            }
+            0xE0 => {
+                self.regs.b = self.set(4, self.regs.b);
+                2
+            }
+            0xE1 => {
+                self.regs.c = self.set(4, self.regs.c);
+                2
+            }
+            0xE2 => {
+                self.regs.d = self.set(4, self.regs.d);
+                2
+            }
+            0xE3 => {
+                self.regs.e = self.set(4, self.regs.e);
+                2
+            }
+            0xE4 => {
+                self.regs.h = self.set(4, self.regs.h);
+                2
+            }
+            0xE5 => {
+                self.regs.l = self.set(4, self.regs.l);
+                2
+            }
+            0xE6 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.set(4, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xE7 => {
+                self.regs.a = self.set(4, self.regs.a);
+                2
+            }
+            0xE8 => {
+                self.regs.b = self.set(5, self.regs.b);
+                2
+            }
+            0xE9 => {
+                self.regs.c = self.set(5, self.regs.c);
+                2
+            }
+            0xEA => {
+                self.regs.d = self.set(5, self.regs.d);
+                2
+            }
+            0xEB => {
+                self.regs.e = self.set(5, self.regs.e);
+                2
+            }
+            0xEC => {
+                self.regs.h = self.set(5, self.regs.h);
+                2
+            }
+            0xED => {
+                self.regs.l = self.set(5, self.regs.l);
+                2
+            }
+            0xEE => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.set(5, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xEF => {
+                self.regs.a = self.set(5, self.regs.a);
+                2
+            }
+            0xF0 => {
+                self.regs.b = self.set(6, self.regs.b);
+                2
+            }
+            0xF1 => {
+                self.regs.c = self.set(6, self.regs.c);
+                2
+            }
+            0xF2 => {
+                self.regs.d = self.set(6, self.regs.d);
+                2
+            }
+            0xF3 => {
+                self.regs.e = self.set(6, self.regs.e);
+                2
+            }
+            0xF4 => {
+                self.regs.h = self.set(6, self.regs.h);
+                2
+            }
+            0xF5 => {
+                self.regs.l = self.set(6, self.regs.l);
+                2
+            }
+            0xF6 => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.set(6, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xF7 => {
+                self.regs.a = self.set(6, self.regs.a);
+                2
+            }
+            0xF8 => {
+                self.regs.b = self.set(7, self.regs.b);
+                2
+            }
+            0xF9 => {
+                self.regs.c = self.set(7, self.regs.c);
+                2
+            }
+            0xFA => {
+                self.regs.d = self.set(7, self.regs.d);
+                2
+            }
+            0xFB => {
+                self.regs.e = self.set(7, self.regs.e);
+                2
+            }
+            0xFC => {
+                self.regs.h = self.set(7, self.regs.h);
+                2
+            }
+            0xFD => {
+                self.regs.l = self.set(7, self.regs.l);
+                2
+            }
+            0xFE => {
+                let val = self.mem.read8(self.regs.get_hl());
+                let temp = self.set(7, val);
+                self.mem.write8(self.regs.get_hl(), temp);
+                4
+            }
+            0xFF => {
+                self.regs.a = self.set(7, self.regs.a);
+                2
+            }
+        }
     }
 }
 
