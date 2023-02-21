@@ -3,6 +3,7 @@ use std::default;
 use crate::{
     cartridge::{Cartridge, NoCartridge},
     joypad::JoypadState,
+    timer::Timer,
 };
 
 const RAM_SIZE: usize = 8_192;
@@ -11,6 +12,7 @@ pub struct Memory {
     ram: [u8; RAM_SIZE],
     cartridge: Box<dyn Cartridge>,
     joy: JoypadState,
+    timer: Timer,
 }
 
 impl Default for Memory {
@@ -19,6 +21,7 @@ impl Default for Memory {
             ram: [0; RAM_SIZE],
             cartridge: Box::new(NoCartridge {}),
             joy: Default::default(),
+            timer: Default::default(),
         }
     }
 }
@@ -30,7 +33,11 @@ impl Memory {
             0xA000..=0xBFFF => self.cartridge.read_ram(addr),
             0xC000..=0xDFFF => self.ram[addr as usize & 0x0FFF],
             0xE000..=0xFDFF => self.ram[addr as usize & 0x0FFF],
-            0xFF00 => self.joy.read()
+            0xFF00 => self.joy.read(),
+            0xFF04 => self.timer.read_div(),
+            0xFF05 => self.timer.read_tima(),
+            0xFF06 => self.timer.read_tma(),
+            0xFF07 => self.timer.read_tac(),
             _ => 0xFF,
         }
     }
@@ -41,7 +48,11 @@ impl Memory {
             0xA000..=0xBFFF => self.cartridge.write_ram(addr, val),
             0xC000..=0xDFFF => self.ram[addr as usize & 0x0FFF] = val,
             0xE000..=0xFDFF => self.ram[addr as usize & 0x0FFF] = val,
-            0xFF00 => self.joy.write(val)
+            0xFF00 => self.joy.write(val),
+            0xFF04 => self.timer.write_div(val),
+            0xFF05 => self.timer.write_tima(val),
+            0xFF06 => self.timer.write_tma(val),
+            0xFF07 => self.timer.write_tac(val),
             _ => (),
         }
     }

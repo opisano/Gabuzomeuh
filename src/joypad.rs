@@ -25,21 +25,21 @@ const DOWN_IDX: usize = 7;
 #[derive(Default)]
 pub struct JoypadState {
     pub buttons: [bool; 8],
-    buttonSelection: ButtonSelection,
+    button_selection: ButtonSelection,
 }
 
 impl JoypadState {
     pub fn write(&mut self, val: u8) {
         // Action buttons
         if (val & 0b0010_0000) == 0 {
-            self.buttonSelection = ButtonSelection::Action;
+            self.button_selection = ButtonSelection::Action;
         } else if (val & 0b0001_0000) == 0 {
-            self.buttonSelection = ButtonSelection::Direction;
+            self.button_selection = ButtonSelection::Direction;
         }
     }
 
     pub fn read(&self) -> u8 {
-        match self.buttonSelection {
+        match self.button_selection {
             ButtonSelection::Action => {
                 self.bit_a() | self.bit_b() | self.bit_sel() | self.bit_sta() | 0xC0
             }

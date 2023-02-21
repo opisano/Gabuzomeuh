@@ -1,7 +1,8 @@
 mod cartridge;
 mod cpu;
-mod memory;
 mod joypad;
+mod memory;
+mod timer;
 
 fn main() {
     println!("Hello, world!");
