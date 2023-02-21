@@ -1,10 +1,3 @@
-enum TimerClock {
-    Hz4096,
-    Hz262144,
-    Hz65536,
-    Hz16384,
-}
-
 const TICKS: u32 = 16;
 const DIVIDER_PERIOD: u32 = 256;
 
@@ -105,4 +98,58 @@ impl Timer {
             }
         }
     }
+}
+
+#[test]
+fn test_divider() {
+    let mut t: Timer = Default::default();
+    t.write_div(0x42);
+    assert_eq!(t.div, 0); // writing any value to div sets it to 0
+
+    t.write_tima(0);
+    t.write_tma(0x42);
+    t.write_tac(0b001); // timer disabled
+
+    assert_eq!(t.enabled, false);
+    assert_eq!(t.step, 16);
+
+    for _ in 0..10 {
+        t.cycle();
+    }
+    assert_eq!(t.div, 0);
+    assert_eq!(t.tima, 0);
+
+    for _ in 0..10 {
+        t.cycle();
+    }
+
+    assert_eq!(t.div, 1);
+    assert_eq!(t.tima, 0);
+}
+
+#[test]
+fn test_timer() {
+    let mut t: Timer = Default::default();
+    t.write_div(0x42);
+    assert_eq!(t.div, 0); // writing any value to div sets it to 0
+
+    t.write_tima(0);
+    t.write_tma(0x42);
+    t.write_tac(0b101); // timer enabled at max frequency
+
+    assert_eq!(t.enabled, true);
+    assert_eq!(t.step, 16);
+
+    for _ in 0..10 {
+        t.cycle();
+    }
+    assert_eq!(t.div, 0);
+    assert_eq!(t.tima, 10);
+
+    for _ in 0..246 {
+        t.cycle();
+    }
+    // check tima is set to tma when it overflows
+    assert_eq!(t.tima, 0x42);
+    assert_eq!(t.div, 16);
 }
