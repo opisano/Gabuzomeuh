@@ -1,12 +1,16 @@
 use std::default;
 
-use crate::cartridge::{Cartridge, NoCartridge};
+use crate::{
+    cartridge::{Cartridge, NoCartridge},
+    joypad::JoypadState,
+};
 
 const RAM_SIZE: usize = 8_192;
 
 pub struct Memory {
     ram: [u8; RAM_SIZE],
     cartridge: Box<dyn Cartridge>,
+    joy: JoypadState,
 }
 
 impl Default for Memory {
@@ -14,6 +18,7 @@ impl Default for Memory {
         Self {
             ram: [0; RAM_SIZE],
             cartridge: Box::new(NoCartridge {}),
+            joy: Default::default(),
         }
     }
 }
@@ -25,6 +30,7 @@ impl Memory {
             0xA000..=0xBFFF => self.cartridge.read_ram(addr),
             0xC000..=0xDFFF => self.ram[addr as usize & 0x0FFF],
             0xE000..=0xFDFF => self.ram[addr as usize & 0x0FFF],
+            0xFF00 => self.joy.read()
             _ => 0xFF,
         }
     }
@@ -35,6 +41,7 @@ impl Memory {
             0xA000..=0xBFFF => self.cartridge.write_ram(addr, val),
             0xC000..=0xDFFF => self.ram[addr as usize & 0x0FFF] = val,
             0xE000..=0xFDFF => self.ram[addr as usize & 0x0FFF] = val,
+            0xFF00 => self.joy.write(val)
             _ => (),
         }
     }
