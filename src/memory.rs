@@ -3,6 +3,7 @@ use std::default;
 use crate::{
     cartridge::{Cartridge, NoCartridge},
     joypad::JoypadState,
+    ppu::Ppu,
     timer::Timer,
 };
 
@@ -13,6 +14,7 @@ pub struct Memory {
     cartridge: Box<dyn Cartridge>,
     joy: JoypadState,
     timer: Timer,
+    ppu: Ppu,
 }
 
 impl Default for Memory {
@@ -22,6 +24,7 @@ impl Default for Memory {
             cartridge: Box::new(NoCartridge {}),
             joy: Default::default(),
             timer: Default::default(),
+            ppu: Default::default(),
         }
     }
 }
@@ -38,6 +41,18 @@ impl Memory {
             0xFF05 => self.timer.read_tima(),
             0xFF06 => self.timer.read_tma(),
             0xFF07 => self.timer.read_tac(),
+            0xFF40 => self.ppu.read_control(),
+            0xFF41 => self.ppu.read_status(),
+            0xFF42 => self.ppu.read_scy(),
+            0xFF43 => self.ppu.read_scx(),
+            0xFF44 => self.ppu.read_ly(),
+            0xFF45 => self.ppu.read_lyc(),
+            0xFF46 => 0,
+            0xFF47 => self.ppu.read_bgp(),
+            0xFF48 => self.ppu.read_obp0(),
+            0xFF49 => self.ppu.read_obp1(),
+            0xFF4A => self.ppu.read_wy(),
+            0xFF4B => self.ppu.read_wy(),
             _ => 0xFF,
         }
     }
@@ -53,6 +68,17 @@ impl Memory {
             0xFF05 => self.timer.write_tima(val),
             0xFF06 => self.timer.write_tma(val),
             0xFF07 => self.timer.write_tac(val),
+            0xFF40 => self.ppu.write_control(val),
+            0xFF41 => self.ppu.write_status(val),
+            0xFF42 => self.ppu.write_scy(val),
+            0xFF43 => self.ppu.write_scx(val),
+            0xFF45 => self.ppu.write_lyc(val),
+            0xFF46 => self.oam_dma(val),
+            0xFF47 => self.ppu.write_bgp(val),
+            0xFF48 => self.ppu.write_obp0(val),
+            0xFF49 => self.ppu.write_obp1(val),
+            0xFF4A => self.ppu.write_wy(val),
+            0xFF4B => self.ppu.write_wx(val),
             _ => (),
         }
     }
