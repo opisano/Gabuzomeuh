@@ -578,7 +578,7 @@ impl Cpu {
         } else {
             self.regs.clear_flag(FLAG_CARRY);
             self.regs.toggle_zero_flag(val >> 1);
-            (val >> 1)
+            val >> 1
         }
     }
 
@@ -645,7 +645,7 @@ impl Cpu {
     /// Shift right logical
     fn srl(&mut self, val: u8) -> u8 {
         let carry = val & 1;
-        let result = (val >> 1);
+        let result = val >> 1;
         self.regs.clear_flag(FLAG_HALF);
         self.regs.clear_flag(FLAG_SUB);
         self.regs.toggle_zero_flag(result);
