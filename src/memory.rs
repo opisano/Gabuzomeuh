@@ -8,9 +8,11 @@ use crate::{
 };
 
 const RAM_SIZE: usize = 8_192;
+const HRAM_SIZE: usize = 127;
 
 pub struct Memory {
     ram: [u8; RAM_SIZE],
+    hram: [u8; HRAM_SIZE],
     cartridge: Box<dyn Cartridge>,
     joy: JoypadState,
     timer: Timer,
@@ -21,6 +23,7 @@ impl Default for Memory {
     fn default() -> Self {
         Self {
             ram: [0; RAM_SIZE],
+            hram: [0; HRAM_SIZE],
             cartridge: Box::new(NoCartridge {}),
             joy: Default::default(),
             timer: Default::default(),
@@ -33,9 +36,11 @@ impl Memory {
     pub fn read8(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x7FFF => self.cartridge.read_rom(addr),
+            0x8000..=0x9FFF => self.ppu.read_vram(addr),
             0xA000..=0xBFFF => self.cartridge.read_ram(addr),
             0xC000..=0xDFFF => self.ram[addr as usize & 0x0FFF],
             0xE000..=0xFDFF => self.ram[addr as usize & 0x0FFF],
+            0xFE00..=0xFE9F => self.ppu.read_oam(addr),
             0xFF00 => self.joy.read(),
             0xFF04 => self.timer.read_div(),
             0xFF05 => self.timer.read_tima(),
@@ -47,12 +52,13 @@ impl Memory {
             0xFF43 => self.ppu.read_scx(),
             0xFF44 => self.ppu.read_ly(),
             0xFF45 => self.ppu.read_lyc(),
-            0xFF46 => 0,
+            0xFF46 => 0, // OAM DMA register is write-only
             0xFF47 => self.ppu.read_bgp(),
             0xFF48 => self.ppu.read_obp0(),
             0xFF49 => self.ppu.read_obp1(),
             0xFF4A => self.ppu.read_wy(),
             0xFF4B => self.ppu.read_wy(),
+            0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80],
             _ => 0xFF,
         }
     }
@@ -60,9 +66,11 @@ impl Memory {
     pub fn write8(&mut self, addr: u16, val: u8) {
         match addr {
             0x0000..=0x7FFF => self.cartridge.write_rom(addr, val),
+            0x8000..=0x9FFF => self.ppu.write_vram(addr, val),
             0xA000..=0xBFFF => self.cartridge.write_ram(addr, val),
             0xC000..=0xDFFF => self.ram[addr as usize & 0x0FFF] = val,
             0xE000..=0xFDFF => self.ram[addr as usize & 0x0FFF] = val,
+            0xFE00..=0xFE9F => self.ppu.write_oam(addr, val),
             0xFF00 => self.joy.write(val),
             0xFF04 => self.timer.write_div(val),
             0xFF05 => self.timer.write_tima(val),
@@ -79,6 +87,7 @@ impl Memory {
             0xFF49 => self.ppu.write_obp1(val),
             0xFF4A => self.ppu.write_wy(val),
             0xFF4B => self.ppu.write_wx(val),
+            0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80] = val,
             _ => (),
         }
     }
@@ -95,5 +104,13 @@ impl Memory {
 
         self.write8(addr, lb);
         self.write8(addr + 1, hb);
+    }
+
+    fn oam_dma(&mut self, value: u8) {
+        let source_address = (value as u16) << 8;
+        for offset in 0..0xA0 {
+            let byte = self.read8(source_address + offset);
+            self.write8(0xFE00 + offset, byte);
+        }
     }
 }

@@ -277,6 +277,26 @@ impl Ppu {
         self.winx = value;
     }
 
+    pub fn read_vram(&self, addr: u16) -> u8 {
+        let local_index = (addr & 0x1FFF) as usize;
+        self.vram[local_index]
+    }
+
+    pub fn write_vram(&mut self, addr: u16, value: u8) {
+        let local_index = (addr & 0x1FFF) as usize;
+        self.vram[local_index] = value;
+    }
+
+    pub fn read_oam(&self, addr: u16) -> u8 {
+        let local_index = addr as usize - 0xFE00;
+        self.oam[local_index]
+    }
+
+    pub fn write_oam(&mut self, addr: u16, value: u8) {
+        let local_index = addr as usize - 0xFE00;
+        self.oam[local_index] = value;
+    }
+
     /// Search for the up to 10 first sprites to draw for current line
     fn oam_search(&self, values: &mut [SpriteInfo; 10]) {
         let entries = self
