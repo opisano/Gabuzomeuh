@@ -223,7 +223,7 @@ fn test_clear_flag() {
 }
 
 #[derive(Default)]
-struct Cpu {
+pub struct Cpu {
     regs: Registers,
     mem: Box<Memory>,
     interrupts: bool,
@@ -231,6 +231,10 @@ struct Cpu {
 }
 
 impl Cpu {
+    pub fn cycle(&mut self) {
+        let ticks = self.execute() * 4;
+    }
+
     fn add8(&mut self, value: u8, use_carry: bool) {
         let carry_value = if use_carry && self.regs.isset_flag(FLAG_CARRY) {
             1u32
@@ -512,6 +516,8 @@ impl Cpu {
     /// The contents of bit 7 are placed in both Carry and bit 0
     ///
     fn rlc(&mut self, val: u8) -> u8 {
+        self.regs.clear_flag(FLAG_HALF);
+        self.regs.clear_flag(FLAG_SUB);
         let temp = (val as u16) << 1;
         if temp & 0x100 == 0x100 {
             self.regs.toggle_flag(FLAG_CARRY);
@@ -540,6 +546,8 @@ impl Cpu {
     /// The previous content of Carry is placed in bit 0
     ///
     fn rl(&mut self, val: u8) -> u8 {
+        self.regs.clear_flag(FLAG_HALF);
+        self.regs.clear_flag(FLAG_SUB);
         let carry = if self.regs.isset_flag(FLAG_CARRY) {
             1u8
         } else {
@@ -571,6 +579,8 @@ impl Cpu {
     ///
     fn rrc(&mut self, val: u8) -> u8 {
         let carry = val & 1;
+        self.regs.clear_flag(FLAG_HALF);
+        self.regs.clear_flag(FLAG_SUB);
         if carry == 1 {
             self.regs.toggle_flag(FLAG_CARRY);
             self.regs.clear_flag(FLAG_ZERO);
@@ -598,6 +608,8 @@ impl Cpu {
     /// The previous content of Carry is placed in bit 7.
     ///
     fn rr(&mut self, val: u8) -> u8 {
+        self.regs.clear_flag(FLAG_HALF);
+        self.regs.clear_flag(FLAG_SUB);
         let carry = val & 1;
         let h = if self.regs.isset_flag(FLAG_CARRY) {
             0x80u8
@@ -3247,9 +3259,12 @@ fn test_rlca() {
 #[test]
 fn test_rlc() {
     let mut cpu: Cpu = Default::default();
+    cpu.regs.f = 0xFF;
     let value = cpu.rlc(0x85);
     assert_eq!(value, 0x0B);
     assert!(cpu.regs.isset_flag(FLAG_CARRY));
+    assert!(!cpu.regs.isset_flag(FLAG_HALF));
+    assert!(!cpu.regs.isset_flag(FLAG_SUB));
 }
 
 #[test]
@@ -3265,7 +3280,11 @@ fn test_rla() {
 #[test]
 fn test_rl() {
     let mut cpu: Cpu = Default::default();
+    cpu.regs.toggle_flag(FLAG_HALF);
+    cpu.regs.toggle_flag(FLAG_SUB);
     let value = cpu.rl(0x80);
+    assert!(!cpu.regs.isset_flag(FLAG_HALF));
+    assert!(!cpu.regs.isset_flag(FLAG_SUB));
     assert_eq!(value, 0);
     assert!(cpu.regs.isset_flag(FLAG_CARRY));
     assert!(cpu.regs.isset_flag(FLAG_ZERO))
@@ -3283,8 +3302,11 @@ fn test_rrca() {
 #[test]
 fn test_rrc() {
     let mut cpu: Cpu = Default::default();
+    cpu.regs.f = 0xFF;
     let value = cpu.rrc(1);
     assert_eq!(value, 0x80);
+    assert!(!cpu.regs.isset_flag(FLAG_HALF));
+    assert!(!cpu.regs.isset_flag(FLAG_SUB));
     assert!(cpu.regs.isset_flag(FLAG_CARRY));
     assert!(!cpu.regs.isset_flag(FLAG_ZERO))
 }
@@ -3302,8 +3324,12 @@ fn test_rra() {
 #[test]
 fn test_rr() {
     let mut cpu: Cpu = Default::default();
+    cpu.regs.toggle_flag(FLAG_HALF);
+    cpu.regs.toggle_flag(FLAG_SUB);
     let value = cpu.rr(1);
     assert_eq!(value, 0);
+    assert!(!cpu.regs.isset_flag(FLAG_HALF));
+    assert!(!cpu.regs.isset_flag(FLAG_SUB));
     assert!(cpu.regs.isset_flag(FLAG_CARRY));
     assert!(cpu.regs.isset_flag(FLAG_ZERO));
 }
