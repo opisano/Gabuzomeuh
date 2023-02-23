@@ -250,15 +250,8 @@ impl Cpu {
     }
 
     fn add_hl(&mut self, value: u16) {
-        self.regs.set_hl(self.regs.get_hl().wrapping_add(value));
+        let result = (self.regs.get_hl() as u32) + (value as u32);
         self.regs.clear_flag(FLAG_SUB);
-    }
-
-    fn add16(&mut self, addr: u16, value: u16) {
-        let mem_value = self.mem.read16(addr);
-        let result = (mem_value as u32) + (value as u32);
-        self.regs.clear_flag(FLAG_SUB);
-
         if (result & 0x1_0000) != 0 {
             self.regs.toggle_flag(FLAG_CARRY);
         }
@@ -266,7 +259,7 @@ impl Cpu {
         if (result & 0x1000) != 0 {
             self.regs.toggle_flag(FLAG_HALF);
         }
-        self.mem.write16(addr, result as u16);
+        self.regs.set_hl(result as u16);
     }
 
     fn add_sp(&mut self, value: u8) {
@@ -449,14 +442,6 @@ impl Cpu {
     fn cpl(&mut self) {
         self.regs.a = !self.regs.a;
         self.regs.f = FLAG_SUB | FLAG_HALF;
-    }
-
-    /// Write the value of Stack pointer at specified address
-    ///
-    /// (addr) := SP
-    ///
-    fn store_sp(&mut self, addr: u16) {
-        self.mem.write16(addr, self.regs.sp);
     }
 
     /// Copy HL into SP
@@ -1716,7 +1701,7 @@ impl Cpu {
             }
             0xE8 => {
                 let val = self.fetch_byte();
-                self.regs.sp = self.regs.sp.wrapping_add(val as u16);
+                self.add_sp(val);
                 2
             }
             0xE9 => {
@@ -3112,13 +3097,29 @@ fn test_cpl() {
 }
 
 #[test]
-fn test_add16() {
+fn test_addhl() {
     let mut cpu: Cpu = Default::default();
-    cpu.add16(0xC000, 0xBABD);
-    cpu.add16(0xC000, 1);
 
-    assert_eq!(cpu.mem.read8(0xC000), 0xBE);
-    assert_eq!(cpu.mem.read8(0xC001), 0xBA);
+    {
+        cpu.regs.toggle_flag(FLAG_SUB);
+        cpu.regs.set_hl(0x8A23);
+        cpu.add_hl(0x0605);
+
+        assert!(!cpu.regs.isset_flag(FLAG_SUB));
+        assert_eq!(cpu.regs.get_hl(), 0x9028);
+        assert!(cpu.regs.isset_flag(FLAG_HALF));
+        assert!(!cpu.regs.isset_flag(FLAG_CARRY));
+    }
+
+    {
+        cpu.regs.set_hl(0x8A23);
+        cpu.add_hl(0x8A23);
+
+        assert!(!cpu.regs.isset_flag(FLAG_SUB));
+        assert_eq!(cpu.regs.get_hl(), 0x1446);
+        assert!(cpu.regs.isset_flag(FLAG_HALF));
+        assert!(cpu.regs.isset_flag(FLAG_CARRY));
+    }
 }
 
 #[test]
