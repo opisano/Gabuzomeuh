@@ -1,5 +1,3 @@
-use std::default;
-
 use crate::{
     cartridge::{Cartridge, NoCartridge},
     joypad::JoypadState,
@@ -57,7 +55,7 @@ impl Memory {
             0xFF48 => self.ppu.read_obp0(),
             0xFF49 => self.ppu.read_obp1(),
             0xFF4A => self.ppu.read_wy(),
-            0xFF4B => self.ppu.read_wy(),
+            0xFF4B => self.ppu.read_wx(),
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80],
             _ => 0xFF,
         }
