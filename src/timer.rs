@@ -1,4 +1,3 @@
-const TICKS: u32 = 16;
 const DIVIDER_PERIOD: u32 = 256;
 
 pub struct Timer {
@@ -75,19 +74,17 @@ impl Timer {
         self.tma = value
     }
 
-    /// For performance reasons, this method shall only be called every 16 cycles
-    /// since this is the highest frequency this timer supports
-    pub fn cycle(&mut self) {
-        self.internal_div += TICKS;
+    pub fn cycle(&mut self, ticks: u32) {
+        self.internal_div += ticks;
 
-        if self.internal_div >= DIVIDER_PERIOD {
+        while self.internal_div >= DIVIDER_PERIOD {
             self.div = self.div.wrapping_add(1u8);
             self.internal_div -= DIVIDER_PERIOD;
         }
 
         if self.enabled {
-            self.internal_count += TICKS;
-            if self.internal_count >= self.step {
+            self.internal_count += ticks;
+            while self.internal_count >= self.step {
                 self.tima = if self.tima == 0xFF {
                     self.tma
                 } else {
@@ -114,13 +111,13 @@ fn test_divider() {
     assert_eq!(t.step, 16);
 
     for _ in 0..10 {
-        t.cycle();
+        t.cycle(16);
     }
     assert_eq!(t.div, 0);
     assert_eq!(t.tima, 0);
 
     for _ in 0..10 {
-        t.cycle();
+        t.cycle(16);
     }
 
     assert_eq!(t.div, 1);
@@ -141,13 +138,13 @@ fn test_timer() {
     assert_eq!(t.step, 16);
 
     for _ in 0..10 {
-        t.cycle();
+        t.cycle(16);
     }
     assert_eq!(t.div, 0);
     assert_eq!(t.tima, 10);
 
     for _ in 0..246 {
-        t.cycle();
+        t.cycle(16);
     }
     // check tima is set to tma when it overflows
     assert_eq!(t.tima, 0x42);
