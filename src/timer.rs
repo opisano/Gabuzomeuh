@@ -1,25 +1,28 @@
+pub const TIMER_INTERRUPT: u8 = 0x04;
 const DIVIDER_PERIOD: u32 = 256;
 
 pub struct Timer {
+    internal_div: u32,
+    internal_count: u32,
+    step: u32,
+    inter: u8,
     div: u8,
     tima: u8,
     tma: u8,
     enabled: bool,
-    step: u32,
-    internal_div: u32,
-    internal_count: u32,
 }
 
 impl Default for Timer {
     fn default() -> Self {
         Self {
+            internal_div: 0,
+            internal_count: 0,
+            step: 256,
+            inter: 0,
             div: 0x18,
             tima: 0x00,
             tma: 0x00,
             enabled: false,
-            step: 256,
-            internal_div: 0,
-            internal_count: 0,
         }
     }
 }
@@ -64,7 +67,7 @@ impl Timer {
             0b01 => 16,
             0b10 => 64,
             0b11 => 256,
-            _ => panic!("Inconsistent step value"),
+            _ => unreachable!(),
         };
 
         self.enabled = if value & 0b100 == 0 { false } else { true };
@@ -90,10 +93,14 @@ impl Timer {
                 } else {
                     self.tima + 1
                 };
-                // TODO interrupt
+                self.inter = TIMER_INTERRUPT;
                 self.internal_count -= self.step;
             }
         }
+    }
+
+    pub fn interrupt(&self) -> u8 {
+        self.inter
     }
 }
 

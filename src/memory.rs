@@ -15,6 +15,8 @@ pub struct Memory {
     joy: JoypadState,
     timer: Timer,
     ppu: Ppu,
+    interrupt_flag: u8,
+    interrupt_mask: u8,
 }
 
 impl Default for Memory {
@@ -26,11 +28,18 @@ impl Default for Memory {
             joy: Default::default(),
             timer: Default::default(),
             ppu: Default::default(),
+            interrupt_flag: 0u8,
+            interrupt_mask: 0x1Fu8,
         }
     }
 }
 
 impl Memory {
+    pub fn cycle(&mut self, ticks: u32) {
+        self.timer.cycle(ticks);
+        self.collect_interrupts();
+    }
+
     pub fn read8(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x7FFF => self.cartridge.read_rom(addr),
@@ -44,6 +53,7 @@ impl Memory {
             0xFF05 => self.timer.read_tima(),
             0xFF06 => self.timer.read_tma(),
             0xFF07 => self.timer.read_tac(),
+            0xFF0F => self.interrupt_flag,
             0xFF40 => self.ppu.read_control(),
             0xFF41 => self.ppu.read_status(),
             0xFF42 => self.ppu.read_scy(),
@@ -57,6 +67,7 @@ impl Memory {
             0xFF4A => self.ppu.read_wy(),
             0xFF4B => self.ppu.read_wx(),
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80],
+            0xFFFF => self.interrupt_mask,
             _ => 0xFF,
         }
     }
@@ -74,6 +85,7 @@ impl Memory {
             0xFF05 => self.timer.write_tima(val),
             0xFF06 => self.timer.write_tma(val),
             0xFF07 => self.timer.write_tac(val),
+            0xFF0F => self.interrupt_flag = val,
             0xFF40 => self.ppu.write_control(val),
             0xFF41 => self.ppu.write_status(val),
             0xFF42 => self.ppu.write_scy(val),
@@ -86,6 +98,7 @@ impl Memory {
             0xFF4A => self.ppu.write_wy(val),
             0xFF4B => self.ppu.write_wx(val),
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80] = val,
+            0xFFFF => self.interrupt_mask = val & 0x1Fu8,
             _ => (),
         }
     }
@@ -110,5 +123,14 @@ impl Memory {
             let byte = self.read8(source_address + offset);
             self.write8(0xFE00 + offset, byte);
         }
+    }
+
+    fn collect_interrupts(&mut self) {
+        self.interrupt_flag |= self.joy.interrupt();
+        self.interrupt_flag |= self.timer.interrupt();
+    }
+
+    pub fn interrupts(&self) -> u8 {
+        self.interrupt_flag & self.interrupt_mask
     }
 }

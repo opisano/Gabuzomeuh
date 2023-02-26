@@ -1,3 +1,5 @@
+pub const JOYPAD_INTERRUPT: u8 = 0x10;
+
 pub enum ButtonSelection {
     Action,
     Direction,
@@ -25,6 +27,7 @@ const DOWN_IDX: usize = 7;
 #[derive(Default)]
 pub struct JoypadState {
     pub buttons: [bool; 8],
+    inter: u8,
     button_selection: ButtonSelection,
 }
 
@@ -47,6 +50,10 @@ impl JoypadState {
                 self.bit_r() | self.bit_l() | self.bit_u() | self.bit_d() | 0xC0
             }
         }
+    }
+
+    pub fn interrupt(&self) -> u8 {
+        self.inter
     }
 
     fn bit_a(&self) -> u8 {
