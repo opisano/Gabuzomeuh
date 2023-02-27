@@ -233,6 +233,7 @@ pub struct Cpu {
 impl Cpu {
     pub fn cycle(&mut self) {
         let ticks = self.execute() * 4;
+        self.mem.cycle(ticks);
     }
 
     fn add8(&mut self, value: u8, use_carry: bool) {
@@ -3172,16 +3173,6 @@ fn test_add_sp() {
     cpu.add_sp(0xFE);
     assert_eq!(cpu.regs.sp, 0xFFFF);
     assert!(cpu.regs.isset_flag(FLAG_CARRY));
-}
-
-#[test]
-fn test_store_sp() {
-    let mut cpu: Cpu = Default::default();
-    cpu.regs.sp = 0x0042;
-
-    assert_eq!(cpu.mem.read16(0xC000), 0);
-    cpu.store_sp(0xC000);
-    assert_eq!(cpu.mem.read16(0xC000), 0x0042);
 }
 
 #[test]

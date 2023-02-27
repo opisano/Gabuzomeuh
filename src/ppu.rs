@@ -1,20 +1,25 @@
-const OAM_SEARCH_CYCLES: i32 = 20;
-const PIXEL_CYCLES: i32 = 42;
-const HBLANK_CYCLES: i32 = 51;
+use std::{f32::consts::PI, thread::current};
 
-const COLS: i32 = 160;
-const ROWS: i32 = 144;
-const VBLANK_ROWS: i32 = 10;
+const OAM_SEARCH_CYCLES: u32 = 80;
+const PIXEL_CYCLES: u32 = 172;
+const HBLANK_CYCLES: u32 = 204;
+
+const COLS: usize = 160;
+const ROWS: usize = 144;
+const VBLANK_ROWS: usize = 10;
 
 const VRAM_SIZE: usize = 8_192;
 const OAM_SIZE: usize = 160;
 
-#[derive(Copy, Clone)]
+pub const PPU_VBLANK_INTERRUPT: u8 = 0x01;
+pub const PPU_STAT_INTERRUPT: u8 = 0x02;
+
+#[derive(Copy, Clone, PartialEq)]
 #[repr(u8)]
 enum Mode {
     HBlank,
     VBlank,
-    SearchingOam,
+    SearchOam,
     Transfering,
 }
 
@@ -58,6 +63,8 @@ struct SpriteInfo {
 pub struct Ppu {
     vram: [u8; VRAM_SIZE],
     oam: [u8; OAM_SIZE],
+    sprites: [SpriteInfo; 10],
+    ticks: u32,
     bg_palette: [Color; 4],
     sprite_palette1: [Color; 3],
     sprite_palette2: [Color; 3],
@@ -72,6 +79,7 @@ pub struct Ppu {
     scx: u8,
     winx: u8,
     winy: u8,
+    inter: u8,
     lcd_display_enabled: bool,
     win_enable: bool,
     sprite_enabled: bool,
@@ -87,13 +95,19 @@ impl Default for Ppu {
         Self {
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
+            sprites: [SpriteInfo {
+                y: 0,
+                x: 0,
+                index: 0,
+            }; 10],
+            ticks: 0u32,
             bg_palette: [Color::White, Color::LGray, Color::DGray, Color::Black],
             sprite_palette1: [Color::LGray, Color::DGray, Color::Black],
             sprite_palette2: [Color::LGray, Color::DGray, Color::Black],
             win_tile_map_addr: Default::default(),
             bg_tile_data_addr: Default::default(),
             bg_tile_map_addr: Default::default(),
-            mode: Mode::SearchingOam,
+            mode: Mode::SearchOam,
             sprite_height: Default::default(),
             ly: Default::default(),
             lyc: Default::default(),
@@ -101,6 +115,7 @@ impl Default for Ppu {
             scx: Default::default(),
             winx: Default::default(),
             winy: Default::default(),
+            inter: Default::default(),
             lcd_display_enabled: Default::default(),
             win_enable: Default::default(),
             sprite_enabled: Default::default(),
@@ -297,8 +312,62 @@ impl Ppu {
         self.oam[local_index] = value;
     }
 
+    pub fn interrupt(&self) -> u8 {
+        self.inter
+    }
+
+    pub fn cycle(&mut self, ticks: u32) {
+        if !self.lcd_display_enabled {
+            return;
+        }
+
+        let mut ticks_left = ticks;
+        while ticks_left > 0 {
+            let current_ticks = if ticks_left >= 80 { 80 } else { ticks_left };
+            self.ticks += current_ticks;
+            ticks_left -= current_ticks;
+
+            if self.ticks >= 456 {
+                self.ticks -= 456;
+                self.ly = (self.ly + 1) % (ROWS + VBLANK_ROWS) as u8;
+                self.check_interrupt_lyc();
+
+                if self.ly >= 144 && self.mode != Mode::VBlank {
+                    self.switch_to_vblank_mode();
+                }
+            }
+
+            if self.ly < ROWS as u8 {
+                if self.ticks <= OAM_SEARCH_CYCLES {
+                    if self.mode != Mode::SearchOam {
+                        self.switch_to_search_oam_mode();
+                        self.oam_search();
+                    }
+                } else if self.ticks <= OAM_SEARCH_CYCLES + PIXEL_CYCLES {
+                    if self.mode != Mode::Transfering {
+                        self.switch_to_transfering_mode();
+                        self.draw();
+                    }
+                } else {
+                    if self.mode != Mode::HBlank {
+                        self.switch_to_hblank_mode();
+                    }
+                }
+            }
+        }
+    }
+
+    fn draw(&mut self) {
+        self.draw_bg();
+        self.draw_sprites();
+    }
+
+    fn draw_bg(&mut self) {}
+
+    fn draw_sprites(&mut self) {}
+
     /// Search for the up to 10 first sprites to draw for current line
-    fn oam_search(&self, values: &mut [SpriteInfo; 10]) {
+    fn oam_search(&mut self) {
         let entries = self
             .oam
             .chunks_exact(4)
@@ -308,12 +377,44 @@ impl Ppu {
 
         let mut arr_idx = 0;
         for (i, entry) in entries {
-            values[arr_idx] = SpriteInfo {
+            self.sprites[arr_idx] = SpriteInfo {
                 y: entry[0],
                 x: entry[1],
                 index: (i * 4) as u8,
             };
             arr_idx += 1;
+        }
+    }
+
+    fn check_interrupt_lyc(&mut self) {
+        if self.lyc_interrupt_enabled && self.ly == self.lyc {
+            self.inter |= PPU_STAT_INTERRUPT;
+        }
+    }
+
+    fn switch_to_vblank_mode(&mut self) {
+        self.mode = Mode::VBlank;
+        self.inter |= PPU_VBLANK_INTERRUPT;
+        if self.vblank_interrupt_enabled {
+            self.inter |= PPU_STAT_INTERRUPT;
+        }
+    }
+
+    fn switch_to_search_oam_mode(&mut self) {
+        self.mode = Mode::SearchOam;
+        if self.oam_interrupt_enabled {
+            self.inter |= PPU_STAT_INTERRUPT;
+        }
+    }
+
+    fn switch_to_transfering_mode(&mut self) {
+        self.mode = Mode::Transfering;
+    }
+
+    fn switch_to_hblank_mode(&mut self) {
+        self.mode = Mode::HBlank;
+        if self.hblank_interrupt_enabled {
+            self.inter |= PPU_STAT_INTERRUPT;
         }
     }
 }

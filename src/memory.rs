@@ -128,9 +128,6 @@ impl Memory {
     fn collect_interrupts(&mut self) {
         self.interrupt_flag |= self.joy.interrupt();
         self.interrupt_flag |= self.timer.interrupt();
-    }
-
-    pub fn interrupts(&self) -> u8 {
-        self.interrupt_flag & self.interrupt_mask
+        self.interrupt_flag |= self.ppu.interrupt();
     }
 }
