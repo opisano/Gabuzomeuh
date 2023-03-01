@@ -3,6 +3,7 @@ use std::{f32::consts::PI, thread::current};
 const OAM_SEARCH_CYCLES: u32 = 80;
 const PIXEL_CYCLES: u32 = 172;
 const HBLANK_CYCLES: u32 = 204;
+const TILE_SIZE: u8 = 8;
 
 const COLS: usize = 160;
 const ROWS: usize = 144;
@@ -63,6 +64,7 @@ struct SpriteInfo {
 pub struct Ppu {
     vram: [u8; VRAM_SIZE],
     oam: [u8; OAM_SIZE],
+    data: [u8; COLS * ROWS],
     sprites: [SpriteInfo; 10],
     ticks: u32,
     bg_palette: [Color; 4],
@@ -95,6 +97,7 @@ impl Default for Ppu {
         Self {
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
+            data: [0; COLS * ROWS],
             sprites: [SpriteInfo {
                 y: 0,
                 x: 0,
@@ -362,7 +365,45 @@ impl Ppu {
         self.draw_sprites();
     }
 
-    fn draw_bg(&mut self) {}
+    fn draw_bg(&mut self) {
+        // if drawing background/window is disabled, we have nothing to do
+        if !self.bg_window_enable {
+            return;
+        }
+
+        let bg_y = self.ly.wrapping_add(self.scy) as u16;
+
+        for x in 0..COLS {
+            let bg_x = self.scx.wrapping_add(x as u8) as u16;
+            let tile_y = bg_y / TILE_SIZE as u16;
+            let tile_x = bg_x / TILE_SIZE as u16;
+            let tile_idx = self.read_vram(self.bg_tile_map_addr + tile_y * 32 + tile_x);
+
+            let tile_addr = if self.bg_tile_data_addr == 0x8000 {
+                self.bg_tile_data_addr + tile_idx as u16 * 16
+            } else {
+                self.bg_tile_data_addr + (tile_idx as i8 as i16 + 128) as u16 * 16
+            };
+
+            let pixel_y = bg_y & 0x07;
+            let byte1 = self.read_vram(tile_addr + (pixel_y * 2));
+            let byte2 = self.read_vram(tile_addr + (pixel_y * 2) + 1);
+
+            let pixel_x = bg_x & 0x07;
+            let color = if byte1 & (1 << pixel_x) != 0 {
+                0b01u8
+            } else {
+                0
+            } | if byte2 & (1 << pixel_x) != 0 {
+                0b10u8
+            } else {
+                0
+            };
+            self.data[self.ly as usize * COLS + x] = color;
+        }
+
+        // TODO draw window
+    }
 
     fn draw_sprites(&mut self) {}
 

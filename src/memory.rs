@@ -37,6 +37,7 @@ impl Default for Memory {
 impl Memory {
     pub fn cycle(&mut self, ticks: u32) {
         self.timer.cycle(ticks);
+        self.ppu.cycle(ticks);
         self.collect_interrupts();
     }
 
