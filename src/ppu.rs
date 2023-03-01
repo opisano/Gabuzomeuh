@@ -1,8 +1,7 @@
-use std::{f32::consts::PI, thread::current};
+use std::cmp;
 
 const OAM_SEARCH_CYCLES: u32 = 80;
 const PIXEL_CYCLES: u32 = 172;
-const HBLANK_CYCLES: u32 = 204;
 const TILE_SIZE: u8 = 8;
 
 const COLS: usize = 160;
@@ -326,7 +325,7 @@ impl Ppu {
 
         let mut ticks_left = ticks;
         while ticks_left > 0 {
-            let current_ticks = if ticks_left >= 80 { 80 } else { ticks_left };
+            let current_ticks = cmp::min(ticks_left, 80);
             self.ticks += current_ticks;
             ticks_left -= current_ticks;
 
@@ -351,10 +350,8 @@ impl Ppu {
                         self.switch_to_transfering_mode();
                         self.draw();
                     }
-                } else {
-                    if self.mode != Mode::HBlank {
-                        self.switch_to_hblank_mode();
-                    }
+                } else if self.mode != Mode::HBlank {
+                    self.switch_to_hblank_mode();
                 }
             }
         }
@@ -390,15 +387,8 @@ impl Ppu {
             let byte2 = self.read_vram(tile_addr + (pixel_y * 2) + 1);
 
             let pixel_x = bg_x & 0x07;
-            let color = if byte1 & (1 << pixel_x) != 0 {
-                0b01u8
-            } else {
-                0
-            } | if byte2 & (1 << pixel_x) != 0 {
-                0b10u8
-            } else {
-                0
-            };
+            let color = if byte1 & (1 << pixel_x) != 0 { 1 } else { 0 }
+                | if byte2 & (1 << pixel_x) != 0 { 2 } else { 0 };
             self.data[self.ly as usize * COLS + x] = color;
         }
 

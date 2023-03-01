@@ -70,7 +70,7 @@ impl Timer {
             _ => unreachable!(),
         };
 
-        self.enabled = if value & 0b100 == 0 { false } else { true };
+        self.enabled = value & 0b100 != 0;
     }
 
     pub fn write_tma(&mut self, value: u8) {

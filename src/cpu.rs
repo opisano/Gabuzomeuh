@@ -1783,7 +1783,7 @@ impl Cpu {
                 2
             }
             x => {
-                panic!("Instruction {:2X} is not implemented", x)
+                panic!("Instruction {x:2X} is not implemented")
             }
         }
     }
