@@ -368,9 +368,18 @@ impl Ppu {
             return;
         }
 
+        // Do we need to draw the window during this scanline ?
+        let window_visible = self.window_visible() && self.ly >= self.winy;
+        let max_bg_x = if !window_visible {
+            COLS
+        } else {
+            self.winx as usize - 7
+        };
+
         let bg_y = self.ly.wrapping_add(self.scy) as u16;
 
-        for x in 0..COLS {
+        // Draw the background
+        for x in 0..max_bg_x {
             let bg_x = self.scx.wrapping_add(x as u8) as u16;
             let tile_y = bg_y / TILE_SIZE as u16;
             let tile_x = bg_x / TILE_SIZE as u16;
@@ -392,29 +401,46 @@ impl Ppu {
             self.data[self.ly as usize * COLS + x] = color;
         }
 
-        // TODO draw window
+        // Draw the window
+        for x in max_bg_x..COLS {
+            let win_x = -((self.winx as i32) - 7) + (x as i32);
+            let tile_y = (self.winy / TILE_SIZE) as u16;
+            let tile_x = (win_x / TILE_SIZE as i32) as u16;
+            let tile_idx = self.read_vram(self.win_tile_map_addr + tile_y * 32 + tile_x);
+
+            let tile_addr = if self.bg_tile_data_addr == 0x8000 {
+                self.bg_tile_data_addr + tile_idx as u16 * 16
+            } else {
+                self.bg_tile_data_addr + (tile_idx as i8 as i16 + 128) as u16 * 16
+            };
+
+            let pixel_y = self.winy as u16 & 0x07;
+            let byte1 = self.read_vram(tile_addr + (pixel_y * 2));
+            let byte2 = self.read_vram(tile_addr + (pixel_y * 2) + 1);
+
+            let pixel_x = (win_x as u8) & 0x07;
+            let color = if byte1 & (1 << pixel_x) != 0 { 1 } else { 0 }
+                | if byte2 & (1 << pixel_x) != 0 { 2 } else { 0 };
+            self.data[self.ly as usize * COLS + x] = color;
+        }
     }
 
     fn draw_sprites(&mut self) {}
 
     /// Search for the up to 10 first sprites to draw for current line
     fn oam_search(&mut self) {
-        let entries = self
-            .oam
+        self.oam
             .chunks_exact(4)
             .enumerate()
-            .filter(|(i, e)| self.ly >= e[0] && self.ly < e[0] + self.sprite_height)
-            .take(10);
-
-        let mut arr_idx = 0;
-        for (i, entry) in entries {
-            self.sprites[arr_idx] = SpriteInfo {
-                y: entry[0],
-                x: entry[1],
-                index: (i * 4) as u8,
-            };
-            arr_idx += 1;
-        }
+            .filter(|(_, e)| self.ly >= e[0] && self.ly < e[0] + self.sprite_height)
+            .zip(&mut self.sprites)
+            .for_each(|((i, e), s)| {
+                *s = SpriteInfo {
+                    y: e[0],
+                    x: e[1],
+                    index: (i * 4) as u8,
+                }
+            });
     }
 
     fn check_interrupt_lyc(&mut self) {
@@ -447,5 +473,9 @@ impl Ppu {
         if self.hblank_interrupt_enabled {
             self.inter |= PPU_STAT_INTERRUPT;
         }
+    }
+
+    fn window_visible(&self) -> bool {
+        self.win_enable && self.winx >= 7 && self.winx < 167 && self.winy < 144
     }
 }
