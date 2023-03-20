@@ -508,3 +508,27 @@ fn test_write_control() {
     assert_eq!(ppu.win_tile_map_addr, 0x9C00);
     assert_eq!(ppu.lcd_display_enabled, false);
 }
+
+#[test]
+fn test_read_control() {
+    let mut ppu: Ppu = Default::default();
+    ppu.bg_window_enable = false;
+    ppu.sprite_enabled = true;
+    ppu.sprite_height = 8;
+    ppu.bg_tile_map_addr = 0x9C00;
+    ppu.bg_tile_data_addr = 0x8800;
+    ppu.win_enable = true;
+    ppu.win_tile_map_addr = 0x9800;
+    ppu.lcd_display_enabled = true;
+    assert_eq!(ppu.read_control(), 0xAA);
+
+    ppu.bg_window_enable = true;
+    ppu.sprite_enabled = false;
+    ppu.sprite_height = 16;
+    ppu.bg_tile_map_addr = 0x9800;
+    ppu.bg_tile_data_addr = 0x8000;
+    ppu.win_enable = false;
+    ppu.win_tile_map_addr = 0x9C00;
+    ppu.lcd_display_enabled = false;
+    assert_eq!(ppu.read_control(), 0x55);
+}
