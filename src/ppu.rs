@@ -168,7 +168,11 @@ impl Ppu {
         } else {
             0x8800
         };
-        self.bg_tile_map_addr = if (value & 0x08) == 0x08 { 0x9C00 } else { 9800 };
+        self.bg_tile_map_addr = if (value & 0x08) == 0x08 {
+            0x9C00
+        } else {
+            0x9800
+        };
         self.sprite_height = if (value & 0x04) == 0x04 { 16 } else { 8 };
         self.sprite_enabled = (value & 0x02) == 0x02;
         self.bg_window_enable = (value & 0x01) == 0x01;
@@ -478,4 +482,29 @@ impl Ppu {
     fn window_visible(&self) -> bool {
         self.win_enable && self.winx >= 7 && self.winx < 167 && self.winy < 144
     }
+}
+
+#[test]
+fn test_write_control() {
+    let mut ppu: Ppu = Default::default();
+    ppu.write_control(0xAA);
+
+    assert!(!ppu.bg_window_enable);
+    assert!(ppu.sprite_enabled);
+    assert_eq!(ppu.sprite_height, 8);
+    assert_eq!(ppu.bg_tile_map_addr, 0x9C00);
+    assert_eq!(ppu.bg_tile_data_addr, 0x8800);
+    assert_eq!(ppu.win_enable, true);
+    assert_eq!(ppu.win_tile_map_addr, 0x9800);
+    assert_eq!(ppu.lcd_display_enabled, true);
+
+    ppu.write_control(0x55);
+    assert!(ppu.bg_window_enable);
+    assert!(!ppu.sprite_enabled);
+    assert_eq!(ppu.sprite_height, 16);
+    assert_eq!(ppu.bg_tile_map_addr, 0x9800);
+    assert_eq!(ppu.bg_tile_data_addr, 0x8000);
+    assert_eq!(ppu.win_enable, false);
+    assert_eq!(ppu.win_tile_map_addr, 0x9C00);
+    assert_eq!(ppu.lcd_display_enabled, false);
 }
