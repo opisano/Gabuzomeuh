@@ -532,3 +532,44 @@ fn test_read_control() {
     ppu.lcd_display_enabled = false;
     assert_eq!(ppu.read_control(), 0x55);
 }
+
+#[test]
+fn test_write_status() {
+    let mut ppu: Ppu = Default::default();
+    ppu.write_status(0xAA);
+
+    assert_eq!(ppu.hblank_interrupt_enabled, true);
+    assert_eq!(ppu.vblank_interrupt_enabled, false);
+    assert_eq!(ppu.oam_interrupt_enabled, true);
+    assert_eq!(ppu.lyc_interrupt_enabled, false);
+
+    ppu.write_status(0x55);
+    assert_eq!(ppu.hblank_interrupt_enabled, false);
+    assert_eq!(ppu.vblank_interrupt_enabled, true);
+    assert_eq!(ppu.oam_interrupt_enabled, false);
+    assert_eq!(ppu.lyc_interrupt_enabled, true);
+}
+
+#[test]
+fn test_read_status() {
+    let mut ppu: Ppu = Default::default();
+    ppu.mode = Mode::SearchOam;
+    ppu.lyc = 42;
+    ppu.ly = 42;
+    ppu.hblank_interrupt_enabled = false;
+    ppu.vblank_interrupt_enabled = true;
+    ppu.oam_interrupt_enabled = false;
+    ppu.lyc_interrupt_enabled = true;
+
+    assert_eq!(ppu.read_status(), 0xD6);
+
+    ppu.mode = Mode::Transfering;
+    ppu.lyc = 0;
+    ppu.ly = 66;
+    ppu.hblank_interrupt_enabled = true;
+    ppu.vblank_interrupt_enabled = false;
+    ppu.oam_interrupt_enabled = true;
+    ppu.lyc_interrupt_enabled = false;
+
+    assert_eq!(ppu.read_status(), 0xAB)
+}
